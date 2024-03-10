@@ -111,11 +111,11 @@ class COCODataset(ObjectDetectionDataset):
 
 class YOLOv8(ObjectDetectionDataset): 
 
-    def __load_dataset__(self, recursive = False):
+    def __load_dataset__(self):
         with open(self.annotation_dir, 'r') as f: 
             annotations = f.read().strip().split("\n")
         
-        image_paths = [os.path.join(self.root_dir, lines.split()[0]) for lines in sorted(annotations)]
+        image_paths = [os.path.join(self.root_dir, lines.split()[0]) for lines in annotations]
         return image_paths
 
     def __parse_annotations__(self):
@@ -123,32 +123,23 @@ class YOLOv8(ObjectDetectionDataset):
             annotations = f.read().split("\n")
 
         parsed_annotations = {img_id : [] for img_id in range(len(annotations))}
-        img_id = 0 
-        for line in sorted(annotations): 
+        for img_id, line in enumerate(annotations): 
             parts = line.split() 
 
             if len(parts) <= 1: 
                 parsed_annotations[img_id] = []
-                img+=1
                 continue
 
-            index = 1 
-            while index < len(parts) - 4:
-                bbox = torch.tensor([parts[idx] for idx in range(index, index + 4)])
-                cat_id = parts[index+4]
+            for index, element in enumerate(parts):
+                if index == 0: 
+                    continue
+                coordinates = element.split(",")
+                bbox = torch.tensor([int(x) for x in coordinates[:4]], dtype = torch.float32)
+                cat_id = coordinates[4]
                 parsed_annotations[img_id].append({cat_id : bbox})
-
-                index += 5
-            
-            img_id += 1
-
+        
         return parsed_annotations
-            
-
-            
-        
-        
-
+    
 class PascalVOCXML(ObjectDetectionDataset): 
 
     def __load_dataset__(self, recursive = False):
