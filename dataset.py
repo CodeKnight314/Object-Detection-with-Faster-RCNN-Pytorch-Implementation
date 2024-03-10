@@ -114,7 +114,7 @@ class YOLOv8(ObjectDetectionDataset):
     def __load_dataset__(self):
         with open(self.annotation_dir, 'r') as f: 
             annotations = f.read().strip().split("\n")
-        
+    
         image_paths = [os.path.join(self.root_dir, lines.split()[0]) for lines in annotations]
         return image_paths
 
@@ -122,14 +122,18 @@ class YOLOv8(ObjectDetectionDataset):
         with open(self.annotation_dir, 'r') as f: 
             annotations = f.read().split("\n")
 
+        # Assuming image_paths are the same order, parse image_id sequentially on dictionary
         parsed_annotations = {img_id : [] for img_id in range(len(annotations))}
         for img_id, line in enumerate(annotations): 
             parts = line.split() 
 
+            # If image does not have boundary box, add empty list to indicate no box and continue
             if len(parts) <= 1: 
                 parsed_annotations[img_id] = []
                 continue
 
+            # For images with boundary box, Go through each and append to the image_id's respective list
+            # Resulting parsed_annotaions should be stadnardized to {image_id : [category_id : torch.tensor()]}
             for index, element in enumerate(parts):
                 if index == 0: 
                     continue
@@ -148,7 +152,6 @@ class PascalVOCXML(ObjectDetectionDataset):
 
     def __parse_annotations__(self):
         pass
-
 
 def load_dataloaders(dataset : ObjectDetectionDataset, batch_size : int, shuffle : bool, drop_last : bool) -> DataLoader:
     dl = DataLoader(dataset, batch_size = batch_size, shuffle = shuffle, drop_last = drop_last)
