@@ -127,15 +127,15 @@ class COCODataset(ObjectDetectionDataset):
 
         return ann
 
-class YOLOv8(ObjectDetectionDataset):
+class YOLOv4(ObjectDetectionDataset):
     """
-    Dataset class for YOLOv8 format annotations.
+    Dataset class for YOLOv4 format annotations.
 
     Inherits from ObjectDetectionDataset and implements the __load_dataset__ and
-    __parse_annotations__ methods specific to YOLOv8 format.
+    __parse_annotations__ methods specific to YOLOv4 format.
     """
     def __load_dataset__(self):
-        """Loads the image file paths from the YOLOv8 annotation file."""
+        """Loads the image file paths from the YOLOv4 annotation file."""
         with open(self.annotation_dir, 'r') as f:
             annotations = f.read().strip().split("\n")
 
@@ -143,7 +143,7 @@ class YOLOv8(ObjectDetectionDataset):
         return image_paths
 
     def __parse_annotations__(self):
-        """Parses the YOLOv8 annotations and maps them to the corresponding image IDs."""
+        """Parses the YOLOv4 annotations and maps them to the corresponding image IDs."""
         with open(self.annotation_dir, 'r') as f:
             annotations = f.read().split("\n")
 
@@ -163,6 +163,48 @@ class YOLOv8(ObjectDetectionDataset):
                 parsed_annotations[img_id].append({cat_id: bbox})
 
         return parsed_annotations
+
+class YOLOv5tov8(ObjectDetectionDataset):
+    """
+    Dataset class for converting YOLOv5 annotations to a format suitable for YOLOv8.
+
+    Inherits from ObjectDetectionDataset and implements methods specific to handling
+    YOLOv5 annotation format.
+    """
+    def __load_dataset__(self, recursive=False):
+        """
+        Loads the image file paths from the dataset directory.
+        """
+        image_paths = sorted(glob(os.path.join(self.root_dir, "images/*.jpg"), recursive=recursive))
+        return image_paths
+    
+    def __parse_annotations__(self, recursive=False):
+        """
+        Parses the YOLOv5 annotations and converts them to a format suitable for YOLOv8.
+        """
+        annotations_dir = sorted(glob(os.path.join(self.root_dir, "labels/*.txt"), recursive=recursive))
+        parsed_annotations = {img_id: [] for img_id in range(len(annotations_dir))}
+        for img_id, (annotation_file, image_path) in enumerate(zip(annotations_dir, self.image_paths)):
+            width, height = Image.open(image_path).convert("RGB").size
+            with open(annotation_file, 'r') as f:
+                annotation_lines = f.read().split("\n")
+            
+            for line in annotation_lines:
+                if line.strip() == "":  # Skip empty lines
+                    continue
+                parts = line.split(" ")
+                x, y, w, h = [float(item) for item in parts[1:]]
+                x_center_abs = x * width
+                y_center_abs = y * height
+                width_abs = w * width
+                height_abs = h * height
+                # Convert to [x_min, y_min, x_max, y_max] format
+                bbox = torch.tensor([x_center_abs - width_abs/2, y_center_abs - height_abs/2, x_center_abs + width_abs/2, y_center_abs + height_abs/2], dtype=torch.float32)
+                class_id = int(parts[0])
+                parsed_annotations[img_id].append({class_id: bbox})
+        
+        return parsed_annotations
+
 
 class PascalVOCXML(ObjectDetectionDataset):
     """
