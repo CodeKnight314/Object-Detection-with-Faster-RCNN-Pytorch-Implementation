@@ -34,13 +34,13 @@ class ObjectDetectionDataset(Dataset, ABC):
                 self.transforms = T.Compose([
                     T.Resize((image_height, image_width)),
                     T.ToTensor(),
-                    T.Normalize([])  # Add normalization parameters
+                    T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])  # Add normalization parameters
                 ])
             elif mode == "valid":
                 self.transforms = T.Compose([
                     T.Resize((image_height, image_width)),
                     T.ToTensor(),
-                    T.Normalize([])  # Add normalization parameters
+                    T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])  # Add normalization parameters
                 ])
 
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -71,16 +71,16 @@ class ObjectDetectionDataset(Dataset, ABC):
         ann = self.annotations[index]
 
         labels = []
-        bbox = [] 
+        box = [] 
 
         for ann_item in ann: 
             for cat_id, bbox in ann_item.items():
                 labels.append(cat_id)            
-                bbox.append(bbox)
+                box.append(bbox)
 
-        bbox = torch.stack(bbox)
+        box = torch.stack(box)
         labels = torch.tensor(labels)
-        return img, {'boxes': bbox, 'labels': labels}
+        return img, {'boxes': box, 'labels': labels}
     
     def __load_dataset__(self):
         """Abstract method to load the dataset. Must be implemented by subclasses."""
@@ -102,8 +102,8 @@ class COCODataset(ObjectDetectionDataset):
         with open(self.annotation_dir, 'r') as f:
             annotations = json.load(f)
 
-        image_id_to_path = {img['id']: os.path.join(self.root_dir, img['file_name']) for img in annotations['images']}
-        image_paths = [image_id_to_path[img_id] for img_id in sorted(image_id_to_path)]
+        self.image_id_to_path = {img['id']: os.path.join(self.root_dir, img['file_name']) for img in annotations['images']}
+        image_paths = [self.image_id_to_path[img_id] for img_id in sorted(self.image_id_to_path)]
         return image_paths
     
     def __parse_annotations__(self):
@@ -171,9 +171,6 @@ class PascalVOCXML(ObjectDetectionDataset):
     Inherits from ObjectDetectionDataset and implements the __load_dataset__,
     __parse_annotations__, and additional helper methods specific to Pascal VOC XML format.
     """
-    def __init__(self, root_dir, image_height, image_width, annotation_dir, transforms=None, mode="train"):
-        super().__init__(root_dir, image_height, image_width, annotation_dir, transforms, mode)
-        self.id_to_category = self.__create_id_to_category_dictionary__()
 
     def __load_dataset__(self, recursive=False):
         """Loads the image file paths from the Pascal VOC dataset directory."""
@@ -183,27 +180,22 @@ class PascalVOCXML(ObjectDetectionDataset):
     def __parse_annotations__(self):
         """Parses the Pascal VOC XML annotations and maps them to the corresponding image IDs."""
         annotation_files = glob(os.path.join(self.root_dir, "*.xml"))
+        self.id_to_category = {}
 
-        parsed_annotations = {image_id: [] for image_id in range(len(self.image_paths))}
-        for index, xml_file in enumerate(annotation_files):
-            parsed_annotations[index] = self.__parse_pascal_xml__(xml_file)
-
-        return parsed_annotations
-
-    def __create_id_to_category_dictionary__(self):
-        """Creates a dictionary mapping category IDs to class names from the Pascal VOC XML annotations."""
-        annotation_files = glob(os.path.join(self.root_dir, "*.xml"))
-        id_to_cat = {}
         for xml_file in annotation_files:
             tree = ET.parse(xml_file)
             root = tree.getroot()
 
             for obj in root.iter('object'):
                 class_name = obj.find('name').text
-                if class_name not in id_to_cat.values():
-                    id_to_cat[len(id_to_cat)] = class_name
+                if class_name not in self.id_to_category.values():
+                    self.id_to_category[len(self.id_to_category)] = class_name
+                    
+        parsed_annotations = {image_id: [] for image_id in range(len(self.image_paths))}
+        for index, xml_file in enumerate(annotation_files):
+            parsed_annotations[index] = self.__parse_pascal_xml__(xml_file)
 
-        return id_to_cat
+        return parsed_annotations
 
     def __parse_pascal_xml__(self, xml_file):
         """Parses a single Pascal VOC XML file and extracts object annotations."""
