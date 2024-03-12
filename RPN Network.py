@@ -5,6 +5,7 @@ import torch.nn.functional as F
 from torchvision.models import resnet18
 from typing import Tuple
 from AnchorGenerator import AnchorGenerator
+from utils.box_utils import *
 
 class RPN_head(nn.Module):
   """
@@ -45,73 +46,6 @@ class RPN_head(nn.Module):
     predicted_bbox = self.bbox(out).permute(0, 2, 3, 1).reshape(N, -1, 4)
 
     return (cls_scores, predicted_bbox)
-
-def bbox_encode(anchors: torch.Tensor, anchor_offsets: torch.Tensor) -> torch.Tensor:
-    """
-    Decodes the bounding box deltas and applies them to the anchor boxes.
-
-    Args:
-        anchors (torch.Tensor): The anchor boxes tensor with shape (batch_size, num_anchors, 4).
-            Each anchor box is represented as (x_min, y_min, x_max, y_max).
-        anchor_offsets (torch.Tensor): The predicted bounding box deltas with shape (batch_size, num_anchors, 4).
-            Each delta is represented as (dx, dy, dw, dh).
-
-    Returns:
-        torch.Tensor: The adjusted anchor boxes tensor with shape (batch_size, num_anchors, 4).
-            Each adjusted box is represented as (x_min, y_min, x_max, y_max).
-    """
-    # Calculate the widths and heights of the anchors
-    anchor_widths = anchors[:, :, 2] - anchors[:, :, 0]
-    anchor_heights = anchors[:, :, 3] - anchors[:, :, 1]
-
-    # Calculate the center coordinates of the anchors
-    anchor_center_x = anchors[:, :, 0] + 0.5 * anchor_widths
-    anchor_center_y = anchors[:, :, 1] + 0.5 * anchor_heights
-
-    # Apply the offsets to the anchor center coordinates
-    new_center_x = anchor_offsets[:, :, 0] * anchor_widths + anchor_center_x
-    new_center_y = anchor_offsets[:, :, 1] * anchor_heights + anchor_center_y
-
-    # Apply the scaling factors to the widths and heights
-    new_widths = torch.exp(anchor_offsets[:, :, 2]) * anchor_widths
-    new_heights = torch.exp(anchor_offsets[:, :, 3]) * anchor_heights
-
-    # Calculate the top-left and bottom-right coordinates of the adjusted anchors
-    top_left_x = new_center_x - 0.5 * new_widths
-    top_left_y = new_center_y - 0.5 * new_heights
-    bottom_right_x = new_center_x + 0.5 * new_widths
-    bottom_right_y = new_center_y + 0.5 * new_heights
-
-    # Combine the coordinates into a single tensor
-    adjusted_anchors = torch.stack([top_left_x, top_left_y, bottom_right_x, bottom_right_y], dim=2)
-
-    return adjusted_anchors
-
-def calculate_iou(proposals: torch.Tensor, references: torch.Tensor) -> torch.Tensor:
-    """
-    Calculate IOU for a set of proposals with a set of references.
-
-    Args:
-        proposals (torch.Tensor): The proposal anchors with shape (number of proposals, 4).
-        references (torch.Tensor): The reference anchors with shape (number of references, 4).
-
-    Returns:
-        torch.Tensor: Tensor containing the IOU values with shape (number of proposals, number of references).
-    """
-    # Calculate the intersection
-    max_xy = torch.min(proposals[:, None, 2:], references[:, 2:])
-    min_xy = torch.max(proposals[:, None, :2], references[:, :2])
-    intersection = torch.clamp(max_xy - min_xy, min=0)
-    intersection_area = intersection[..., 0] * intersection[..., 1]
-
-    # Calculate the union
-    proposals_area = (proposals[:, 2] - proposals[:, 0]) * (proposals[:, 3] - proposals[:, 1])
-    references_area = (references[:, 2] - references[:, 0]) * (references[:, 3] - references[:, 1])
-    union_area = proposals_area[:, None] + references_area - intersection_area
-
-    # Calculate IoU
-    iou = intersection_area / union_area
-    return iou
 
 class ProposalFilter(nn.Module):
     """
