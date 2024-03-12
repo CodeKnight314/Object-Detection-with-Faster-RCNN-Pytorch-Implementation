@@ -6,6 +6,7 @@ from torchvision.models import resnet18
 from typing import Tuple
 from AnchorGenerator import AnchorGenerator
 from utils.box_utils import *
+from roi import ROIPooling
 
 class RPN_head(nn.Module):
   """
@@ -202,6 +203,8 @@ class Regional_Proposal_Network(nn.Module):
 
         self.proposal_Filter = ProposalFilter(iou_threshold=score_threshold, min_size=min_size)
 
+        self.roi = ROIPooling((7,7), 1.0)
+
     def forward(self, image_list: torch.Tensor, feature_map: torch.Tensor) -> torch.Tensor:
         """
         Forward pass of the Regional Proposal Network.
@@ -215,6 +218,15 @@ class Regional_Proposal_Network(nn.Module):
         """
         predict_cls, predict_bbox_deltas = self.rpn_head(feature_map)
         anchors = self.anchor_gen(image_list, feature_map)
+        
         decoded_anchors = bbox_encode(predict_bbox_deltas, anchors)
+        
         filtered_anchors = self.proposal_Filter(decoded_anchors, predict_cls)
-        return filtered_anchors
+       
+        roi = torch.cat(filtered_anchors, dim = 0)
+        batch_index = torch.cat([torch.full((len(batch), 1), i) for i, batch in enumerate(filtered_anchors)], dim = 0)
+        roi = torch.cat([roi, batch_index], dim = 1)
+        
+        output = self.roi(feature_map, roi)
+        
+        return output
