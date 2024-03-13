@@ -1,6 +1,7 @@
 import torch 
 import torch.nn as nn 
 from typing import Tuple
+import torch.nn.functional as F
 
 class ROIPooling(nn.Module): 
 
@@ -39,7 +40,7 @@ class ROIPooling(nn.Module):
 
         for i in range(num_of_roi): 
             batch_idx, x_min, y_min, x_max, y_max = torch.round(ROI[i] * self.scale).long()
-            region_of_interest = feautre_maps[batch_idx, :, x_min:x_max, y_min:y_max]
+            region_of_interest = feautre_maps[batch_idx, :, y_min:y_max, x_min:x_max]
 
             roi_height, roi_width = region_of_interest[-2:]
 
@@ -58,3 +59,52 @@ class ROIPooling(nn.Module):
                     output[i, :, h_pos, w_pos] = torch.max(bin.view(512, -1),dim=1)[0]
 
         return output
+    
+class ROIAlign(nn.Module): 
+
+    def __init__(self,output_size : Tuple[int, int], scale : float, sampling_ratio : int): 
+
+        self.output_size = output_size
+        self.scale = scale 
+        self.sampling_ratio = sampling_ratio
+
+    def forward(self, feature_maps : torch.tensor, ROI : torch.tensor): 
+
+        height, width = self.output_size
+
+        num_of_roi = ROI.size(0)
+        channels = feature_maps.size(1)
+        
+        output = torch.zeros(num_of_roi, channels, height, width, 
+                             dtype = feature_maps.dtype, device = feature_maps.device)
+        
+
+        for i in range(num_of_roi): 
+            batch_index, xmin, ymin, xmax, ymax = torch.round(ROI[i] * self.scale).long() 
+            region_of_interest = feature_maps[batch_index, :, ymin:ymax, xmin:xmax]
+
+            f_map_height, f_map_width = region_of_interest[-2:]
+
+            bin_height = f_map_height / float(height)
+            bin_width = f_map_width / float(width)
+
+            for h_pos in range(height): 
+                for w_pos in range(width): 
+                    start_x = int(torch.floor(w_pos * bin_width))
+                    end_x = int(torch.ceil((w_pos + 1) * bin_width))
+                    start_y = int(torch.floor(h_pos * bin_height))
+                    end_y = int(torch.ceil((h_pos + 1) * bin_height))
+
+                    pool_region = region_of_interest[:, start_y:end_y, start_x:end_x]
+
+                    if pool_region.numel() == 0:
+                        output[i, :, h_pos, w_pos] = 0
+                    else:
+                        output[i, :, h_pos, w_pos] = F.avg_pool2d(
+                            pool_region, (end_y - start_y, end_x - start_x), stride=1, padding=0).view(-1)
+                        
+        return output
+
+
+
+
