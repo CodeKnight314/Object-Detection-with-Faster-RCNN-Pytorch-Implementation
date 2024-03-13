@@ -85,8 +85,6 @@ class Regional_Proposal_Network(nn.Module):
 
         self.proposal_Filter = ProposalFilter(iou_threshold=score_threshold, min_size=min_size)
 
-        self.roi = ROIPooling((7,7), 1.0)
-
     def forward(self, image_list: torch.Tensor, feature_map: torch.Tensor) -> torch.Tensor:
         """
         Forward pass of the Regional Proposal Network.
@@ -108,7 +106,5 @@ class Regional_Proposal_Network(nn.Module):
         roi = torch.cat(filtered_anchors, dim = 0)
         batch_index = torch.cat([torch.full((len(batch), 1), i) for i, batch in enumerate(filtered_anchors)], dim = 0)
         roi = torch.cat([roi, batch_index], dim = 1)
-        
-        output = self.roi(feature_map, roi)
-        
-        return output
+                
+        return roi

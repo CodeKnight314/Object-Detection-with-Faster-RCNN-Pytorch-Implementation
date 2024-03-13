@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn 
 from typing import Tuple
 import torch.nn.functional as F
+import math
 
 class ROIPooling(nn.Module): 
 
@@ -42,28 +43,28 @@ class ROIPooling(nn.Module):
             batch_idx, x_min, y_min, x_max, y_max = torch.round(ROI[i] * self.scale).long()
             region_of_interest = feautre_maps[batch_idx, :, y_min:y_max, x_min:x_max]
 
-            roi_height, roi_width = region_of_interest[-2:]
+            roi_height, roi_width = region_of_interest.shape[-2:]
 
             bin_height = roi_height / height
             bin_width = roi_width / width
 
             for h_pos in range(height): 
                 for w_pos in range(width): 
-                    start_x = torch.floor(h_pos * bin_width)
-                    end_x = torch.ceil((h_pos + 1) * bin_width)
-                    start_y = torch.floor(w_pos * bin_height)
-                    end_y = torch.ceil((w_pos + 1) * bin_height)
+                    start_x = math.floor(h_pos * bin_width)
+                    end_x = math.ceil((h_pos + 1) * bin_width)
+                    start_y = math.floor(w_pos * bin_height)
+                    end_y = math.ceil((w_pos + 1) * bin_height)
 
                     bin = region_of_interest[:, start_x:end_x, start_y:end_y]
 
-                    output[i, :, h_pos, w_pos] = torch.max(bin.view(512, -1),dim=1)[0]
+                    output[i, :, h_pos, w_pos] = torch.max(bin.reshape(512, -1),dim=1)[0]
 
         return output
     
 class ROIAlign(nn.Module): 
 
     def __init__(self,output_size : Tuple[int, int], scale : float, sampling_ratio : int): 
-
+        super(ROIAlign, self).__init__()
         self.output_size = output_size
         self.scale = scale 
         self.sampling_ratio = sampling_ratio
@@ -78,22 +79,21 @@ class ROIAlign(nn.Module):
         output = torch.zeros(num_of_roi, channels, height, width, 
                              dtype = feature_maps.dtype, device = feature_maps.device)
         
-
         for i in range(num_of_roi): 
             batch_index, xmin, ymin, xmax, ymax = torch.round(ROI[i] * self.scale).long() 
             region_of_interest = feature_maps[batch_index, :, ymin:ymax, xmin:xmax]
 
-            f_map_height, f_map_width = region_of_interest[-2:]
+            f_map_height, f_map_width = region_of_interest.shape[-2:]
 
             bin_height = f_map_height / float(height)
             bin_width = f_map_width / float(width)
 
             for h_pos in range(height): 
                 for w_pos in range(width): 
-                    start_x = int(torch.floor(w_pos * bin_width))
-                    end_x = int(torch.ceil((w_pos + 1) * bin_width))
-                    start_y = int(torch.floor(h_pos * bin_height))
-                    end_y = int(torch.ceil((h_pos + 1) * bin_height))
+                    start_x = int(math.floor(w_pos * bin_width))
+                    end_x = int(math.ceil((w_pos + 1) * bin_width))
+                    start_y = int(math.floor(h_pos * bin_height))
+                    end_y = int(math.ceil((h_pos + 1) * bin_height))
 
                     pool_region = region_of_interest[:, start_y:end_y, start_x:end_x]
 
@@ -104,7 +104,3 @@ class ROIAlign(nn.Module):
                             pool_region, (end_y - start_y, end_x - start_x), stride=1, padding=0).view(-1)
                         
         return output
-
-
-
-
