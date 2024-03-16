@@ -19,9 +19,9 @@ class Faster_RCNN(nn.Module):
         
         self.roi = ROIAlign(output_size=(7, 7), scale=1.0, sampling_ratio = 2)
         
-        self.detector_cls = nn.Sequential(*[nn.Linear(512, num_classes), nn.Dropout(0.3)])
+        self.detector_cls = nn.Sequential(*[nn.Linear(25088, num_classes), nn.Dropout(0.3)])
 
-        self.detector_bbox = nn.Sequential(*[nn.Linear(512, num_classes * 4), nn.Dropout(0.3)])
+        self.detector_bbox = nn.Sequential(*[nn.Linear(25088, num_classes * 4), nn.Dropout(0.3)])
 
     def forward(self, x : torch.Tensor):
 

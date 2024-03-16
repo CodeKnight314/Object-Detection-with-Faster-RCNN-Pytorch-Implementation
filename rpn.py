@@ -5,7 +5,7 @@ from typing import Tuple
 from AnchorGenerator import AnchorGenerator
 from utils.box_utils import *
 from roi import ROIPooling
-from ProposalFilter import ProposalFilter
+from Proposal_Filter import ProposalFilter
 
 class RPN_head(nn.Module):
   """
@@ -102,7 +102,7 @@ class Regional_Proposal_Network(nn.Module):
         decoded_anchors = bbox_encode(predict_bbox_deltas, anchors)
         
         filtered_anchors = self.proposal_Filter(decoded_anchors, predict_cls)
-       
+
         roi = torch.cat(filtered_anchors, dim = 0)
         batch_index = torch.cat([torch.full((len(batch), 1), i) for i, batch in enumerate(filtered_anchors)], dim = 0).to(feature_map.device)
         roi = torch.cat([roi, batch_index], dim = 1)
