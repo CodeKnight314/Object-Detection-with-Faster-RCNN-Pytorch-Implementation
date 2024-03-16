@@ -31,8 +31,6 @@ class Faster_RCNN(nn.Module):
 
         pooled_features = self.roi(feature_maps, roi).view(x.size(0), -1)
 
-        print(pooled_features.shape)
-
         cls_label = self.detector_cls(pooled_features)
 
         bbox = self.detector_bbox(pooled_features)

@@ -67,7 +67,7 @@ class Regional_Proposal_Network(nn.Module):
                  mid_dimension: int,
                  conv_depth: int,
                  score_threshold: float,
-                 nms_threshold: float,
+                 iou_threshold: float,
                  min_size: int,
                  max_proposals: int,
                  size: Tuple[int],
@@ -83,7 +83,7 @@ class Regional_Proposal_Network(nn.Module):
 
         self.rpn_head = RPN_head(input_dimensions=input_dimension, mid_channels=mid_dimension, num_anchors=self.num_anchors, conv_depth=conv_depth)
 
-        self.proposal_Filter = ProposalFilter(iou_threshold=score_threshold, min_size=min_size)
+        self.proposal_Filter = ProposalFilter(iou_threshold=iou_threshold, score_threshold=score_threshold, min_size=min_size, max_proposals=max_proposals)
 
     def forward(self, image_list: torch.Tensor, feature_map: torch.Tensor) -> torch.Tensor:
         """
