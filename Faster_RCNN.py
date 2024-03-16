@@ -5,7 +5,6 @@ from torchvision.models import resnet18, ResNet18_Weights
 from roi import *
 
 class Faster_RCNN(nn.Module): 
-
     def __init__(self, num_classes): 
 
         super(Faster_RCNN, self).__init__()
