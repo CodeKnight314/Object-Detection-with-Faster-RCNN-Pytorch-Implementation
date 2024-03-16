@@ -8,6 +8,8 @@ class Faster_RCNN(nn.Module):
 
     def __init__(self, num_classes): 
 
+        super(Faster_RCNN, self).__init__()
+
         self.backbone = nn.Sequential(*list(resnet18(weights = ResNet18_Weights).children())[:-2])
 
         self.rpn = Regional_Proposal_Network(input_dimension=512, mid_dimension=256, conv_depth=4,
@@ -17,8 +19,23 @@ class Faster_RCNN(nn.Module):
         
         self.roi = ROIAlign(output_size=(7, 7), spatial_scale=1.0, sampling_ratio=2)
         
-        self.detector_cls = nn.Linear(512, num_classes)
+        self.detector_cls = nn.Sequential(*[nn.Linear(512, num_classes), nn.Dropout(0.3)])
 
-        self.detector_bbox = nn.Linear(512, num_classes * 4)
+        self.detector_bbox = nn.Sequential(*[nn.Linear(512, num_classes * 4), nn.Dropout(0.3)])
+
+    def forward(self, x : torch.Tensor):
+
+        feature_maps = self.backbone(x)
+
+        roi = self.rpn(x, feature_maps)
+
+        filtered_roi = self.roi(roi)
+
+        cls_label = self.detector_cls(filtered_roi)
+
+        bbox = self.detector_bbox(filtered_roi)
+
+        return cls_label, bbox
+
 
         
