@@ -83,7 +83,7 @@ class Regional_Proposal_Network(nn.Module):
 
         self.rpn_head = RPN_head(input_dimensions=input_dimension, mid_channels=mid_dimension, num_anchors=self.num_anchors, conv_depth=conv_depth)
 
-        self.proposal_Filter = ProposalFilter(iou_threshold=iou_threshold, score_threshold=score_threshold, min_size=min_size, max_proposals=max_proposals)
+        self.proposal_Filter = ProposalFilter(iou_threshold=0.5, min_size=10, score_threshold=0.5, max_proposals=100)
 
     def forward(self, image_list: torch.Tensor, feature_map: torch.Tensor) -> torch.Tensor:
         """
@@ -101,10 +101,14 @@ class Regional_Proposal_Network(nn.Module):
         
         decoded_anchors = bbox_encode(predict_bbox_deltas, anchors)
         
-        filtered_anchors = self.proposal_Filter(decoded_anchors, predict_cls)
+        filtered_anchors, filtered_cls = self.proposal_Filter(decoded_anchors, predict_cls)
 
         roi = torch.cat(filtered_anchors, dim = 0)
+        cls = torch.cat(filtered_cls, dim = 0)
+
         batch_index = torch.cat([torch.full((len(batch), 1), i) for i, batch in enumerate(filtered_anchors)], dim = 0).to(feature_map.device)
+        
         roi = torch.cat([roi, batch_index], dim = 1)
-                
+        cls = torch.cat([cls, batch_index], dim = 1)
+        
         return roi

@@ -1,4 +1,3 @@
-
 import torch
 import torch.nn as nn
 from typing import Tuple
@@ -25,20 +24,13 @@ class ProposalFilter(nn.Module):
             prop = prop[high_score_idxs]
             scores = scores[high_score_idxs]
 
-            # Minimum size filtering
-            widths = prop[:, 2] - prop[:, 0]
-            heights = prop[:, 3] - prop[:, 1]
-            size_idxs = torch.where((widths >= self.min_size) & (heights >= self.min_size))[0]
-            prop = prop[size_idxs]
-            scores = scores[size_idxs]
-
             # Apply NMS and select top-scoring proposals
             keep_idxs = self.nms(prop, scores)
             keep_idxs = keep_idxs[:self.max_proposals]  # Keep top-scoring proposals
             filtered_proposals.append(prop[keep_idxs])
             filtered_scores.append(scores[keep_idxs])
 
-        return torch.stack(filtered_proposals), torch.stack(filtered_scores)
+        return filtered_proposals, filtered_scores
 
     def nms(self, proposals: torch.Tensor, scores: torch.Tensor) -> torch.Tensor:
         # Sort proposals by scores in descending order
