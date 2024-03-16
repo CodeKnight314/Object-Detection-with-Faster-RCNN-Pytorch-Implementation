@@ -11,6 +11,16 @@ class ProposalFilter(nn.Module):
         self.max_proposals = max_proposals
 
     def forward(self, proposals: torch.Tensor, cls_scores: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        Filters and processes the proposals and classification scores.
+
+        Args:
+            proposals (torch.Tensor): The proposed bounding boxes with shape (batch_size, num_proposals, 4).
+            cls_scores (torch.Tensor): The classification scores for each proposal with shape (batch_size, num_proposals, num_classes).
+
+        Returns:
+            Tuple[torch.Tensor, torch.Tensor]: The filtered proposals and their respective scores.
+        """
         batch_size = proposals.shape[0]
         filtered_proposals = []
         filtered_scores = []
@@ -26,13 +36,31 @@ class ProposalFilter(nn.Module):
 
             # Apply NMS and select top-scoring proposals
             keep_idxs = self.nms(prop, scores)
-            keep_idxs = keep_idxs[:self.max_proposals]  # Keep top-scoring proposals
+            keep_idxs = keep_idxs[:self.max_proposals]
+            
+            # Check if we have less than max_proposals
+            if len(keep_idxs) < self.max_proposals:
+                # Pad the keep_idxs to ensure uniform size
+                pad_size = self.max_proposals - len(keep_idxs)
+                pad_idxs = torch.full((pad_size,), keep_idxs[-1], dtype=torch.long, device = proposals.device)
+                keep_idxs = torch.cat((keep_idxs, pad_idxs))
+
             filtered_proposals.append(prop[keep_idxs])
             filtered_scores.append(scores[keep_idxs])
 
         return filtered_proposals, filtered_scores
 
     def nms(self, proposals: torch.Tensor, scores: torch.Tensor) -> torch.Tensor:
+        """
+        Applies Non-Maximum Suppression (NMS) to filter overlapping bounding boxes based on their scores.
+
+        Args:
+            proposals (torch.Tensor): Proposed bounding boxes with shape (num_proposals, 4).
+            scores (torch.Tensor): Corresponding scores for each proposal with shape (num_proposals,).
+
+        Returns:
+            torch.Tensor: Indices of proposals kept after NMS.
+        """
         # Sort proposals by scores in descending order
         _, idxs = scores.sort(descending=True)
         proposals = proposals[idxs]
