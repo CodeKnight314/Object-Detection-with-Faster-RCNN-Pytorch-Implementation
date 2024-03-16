@@ -4,6 +4,8 @@ from typing import Tuple
 import torch.nn.functional as F
 import math
 
+# ROI Pooling is broken for some reason -> Faster RCNN fails once ROI Pooling is used
+
 class ROIPooling(nn.Module): 
 
     def __init__(self, output_size : Tuple[int, int], scale : float): 
