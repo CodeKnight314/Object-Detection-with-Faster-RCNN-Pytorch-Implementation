@@ -19,7 +19,7 @@ class ROIPooling(nn.Module):
         self.output_size = output_size 
         self.scale = scale
     
-    def forward(self, feautre_maps : torch.tensor, ROI : torch.tensor):
+    def forward(self, feature_maps : torch.tensor, ROI : torch.tensor):
         """
         Applies ROI Pooling to the input feature map.
 
@@ -34,14 +34,20 @@ class ROIPooling(nn.Module):
         height, width = self.output_size 
 
         num_of_roi = ROI.size(0)
-        channels = feautre_maps.size(1)
+        channels = feature_maps.size(1)
 
         output = torch.zeros([num_of_roi, channels, height, width], 
-                             dtype = feautre_maps.dtype, device = feautre_maps.device)
+                             dtype = feature_maps.dtype, device = feature_maps.device)
 
         for i in range(num_of_roi): 
-            batch_idx, x_min, y_min, x_max, y_max = torch.round(ROI[i] * self.scale).long()
-            region_of_interest = feautre_maps[batch_idx, :, y_min:y_max, x_min:x_max]
+            x_min, y_min, x_max, y_max, batch_idx = torch.round(ROI[i] * self.scale).long()
+            batch_idx = batch_idx.clamp(0, feature_maps.size(0) - 1)
+            x_min = x_min.clamp(0, feature_maps.size(3) - 1)
+            y_min = y_min.clamp(0, feature_maps.size(2) - 1)
+            x_max = x_max.clamp(x_min, feature_maps.size(3))
+            y_max = y_max.clamp(y_min, feature_maps.size(2))
+
+            region_of_interest = feature_maps[batch_idx, :, y_min:y_max, x_min:x_max]
 
             roi_height, roi_width = region_of_interest.shape[-2:]
 
@@ -80,8 +86,14 @@ class ROIAlign(nn.Module):
                              dtype = feature_maps.dtype, device = feature_maps.device)
         
         for i in range(num_of_roi): 
-            batch_index, xmin, ymin, xmax, ymax = torch.round(ROI[i] * self.scale).long() 
-            region_of_interest = feature_maps[batch_index, :, ymin:ymax, xmin:xmax]
+            x_min, y_min, x_max, y_max, batch_idx = torch.round(ROI[i] * self.scale).long()
+            batch_idx = batch_idx.clamp(0, feature_maps.size(0) - 1)
+            x_min = x_min.clamp(0, feature_maps.size(3) - 1)
+            y_min = y_min.clamp(0, feature_maps.size(2) - 1)
+            x_max = x_max.clamp(x_min, feature_maps.size(3))
+            y_max = y_max.clamp(y_min, feature_maps.size(2))
+
+            region_of_interest = feature_maps[batch_idx, :, y_min:y_max, x_min:x_max]
 
             f_map_height, f_map_width = region_of_interest.shape[-2:]
 

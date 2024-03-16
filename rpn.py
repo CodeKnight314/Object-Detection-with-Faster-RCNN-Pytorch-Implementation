@@ -104,7 +104,7 @@ class Regional_Proposal_Network(nn.Module):
         filtered_anchors = self.proposal_Filter(decoded_anchors, predict_cls)
        
         roi = torch.cat(filtered_anchors, dim = 0)
-        batch_index = torch.cat([torch.full((len(batch), 1), i) for i, batch in enumerate(filtered_anchors)], dim = 0)
+        batch_index = torch.cat([torch.full((len(batch), 1), i) for i, batch in enumerate(filtered_anchors)], dim = 0).to(feature_map.device)
         roi = torch.cat([roi, batch_index], dim = 1)
                 
         return roi
