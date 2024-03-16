@@ -4,117 +4,60 @@ from typing import Tuple
 import torch.nn.functional as F
 import math
 
-# ROI Pooling is broken for some reason -> Faster RCNN fails once ROI Pooling is used
-
-class ROIPooling(nn.Module): 
-
-    def __init__(self, output_size : Tuple[int, int], scale : float): 
-        """
-        Implements Region of Interest (ROI) Pooling for object detection from scratch.
-
-        Attributes:
-            output_size (Tuple[int, int]): The size of the output feature map after pooling.
-            spatial_scale (float): A scaling factor to map the input coordinates to the feature map coordinates.
-        """
+class ROIPooling(nn.Module):
+    def __init__(self, output_size: Tuple[int, int], spatial_scale: float):
         super(ROIPooling, self).__init__()
+        self.output_size = output_size
+        self.spatial_scale = spatial_scale
 
-        self.output_size = output_size 
-        self.scale = scale
-    
-    def forward(self, feature_maps : torch.tensor, ROI : torch.tensor):
-        """
-        Applies ROI Pooling to the input feature map.
-
-        Args:
-            features (torch.Tensor): The input feature map with shape (batch_size, num_channels, height, width).
-            rois (torch.Tensor): The ROIs with shape (num_rois, 5), where each ROI is represented as
-                                 (batch_index, x_min, y_min, x_max, y_max).
-
-        Returns:
-            torch.Tensor: The pooled feature map with shape (num_rois, num_channels, output_height, output_width).
-        """
-        height, width = self.output_size 
-
-        num_of_roi = ROI.size(0)
+    def forward(self, feature_maps: torch.Tensor, rois: torch.Tensor):
+        num_rois = rois.size(0)
         channels = feature_maps.size(1)
+        pooled_height, pooled_width = self.output_size
+        output = torch.zeros(num_rois, channels, pooled_height, pooled_width, dtype=feature_maps.dtype, device=feature_maps.device)
 
-        output = torch.zeros([num_of_roi, channels, height, width], 
-                             dtype = feature_maps.dtype, device = feature_maps.device)
+        for i in range(num_rois):
+            x_min, y_min, x_max, y_max, batch_idx = rois[i] * self.spatial_scale
+            batch_idx = int(batch_idx)
 
-        for i in range(num_of_roi): 
-            x_min, y_min, x_max, y_max, batch_idx = torch.round(ROI[i] * self.scale).long()
-            batch_idx = batch_idx.clamp(0, feature_maps.size(0) - 1)
-            x_min = x_min.clamp(0, feature_maps.size(3) - 1)
-            y_min = y_min.clamp(0, feature_maps.size(2) - 1)
-            x_max = x_max.clamp(x_min, feature_maps.size(3))
-            y_max = y_max.clamp(y_min, feature_maps.size(2))
+            x_min, x_max = torch.round(torch.tensor([x_min, x_max]) * self.spatial_scale).long().clamp(0, feature_maps.size(3) - 1)
+            y_min, y_max = torch.round(torch.tensor([y_min, y_max]) * self.spatial_scale).long().clamp(0, feature_maps.size(2) - 1)
 
-            region_of_interest = feature_maps[batch_idx, :, y_min:y_max, x_min:x_max]
+            x_max = max(x_max, x_min + 1)  # Ensure non-zero region size
+            y_max = max(y_max, y_min + 1)  # Ensure non-zero region size
 
-            roi_height, roi_width = region_of_interest.shape[-2:]
-
-            bin_height = roi_height / height
-            bin_width = roi_width / width
-
-            for h_pos in range(height): 
-                for w_pos in range(width): 
-                    start_x = math.floor(h_pos * bin_width)
-                    end_x = math.ceil((h_pos + 1) * bin_width)
-                    start_y = math.floor(w_pos * bin_height)
-                    end_y = math.ceil((w_pos + 1) * bin_height)
-
-                    bin = region_of_interest[:, start_x:end_x, start_y:end_y]
-
-                    output[i, :, h_pos, w_pos] = torch.max(bin.reshape(512, -1),dim=1)[0]
+            roi_feature_map = feature_maps[batch_idx, :, y_min:y_max, x_min:x_max]
+            if roi_feature_map.numel() > 0:
+                output[i] = F.adaptive_max_pool2d(roi_feature_map, self.output_size)
+            else:
+                output[i] = torch.zeros(channels, pooled_height, pooled_width, dtype=feature_maps.dtype, device=feature_maps.device)
 
         return output
     
-class ROIAlign(nn.Module): 
-
-    def __init__(self,output_size : Tuple[int, int], scale : float, sampling_ratio : int): 
+class ROIAlign(nn.Module):
+    def __init__(self, output_size: Tuple[int, int], spatial_scale: float):
         super(ROIAlign, self).__init__()
         self.output_size = output_size
-        self.scale = scale 
-        self.sampling_ratio = sampling_ratio
+        self.spatial_scale = spatial_scale
 
-    def forward(self, feature_maps : torch.tensor, ROI : torch.tensor): 
-
-        height, width = self.output_size
-
-        num_of_roi = ROI.size(0)
+    def forward(self, feature_maps: torch.Tensor, rois: torch.Tensor):
+        num_rois = rois.size(0)
         channels = feature_maps.size(1)
-        
-        output = torch.zeros(num_of_roi, channels, height, width, 
-                             dtype = feature_maps.dtype, device = feature_maps.device)
-        
-        for i in range(num_of_roi): 
-            x_min, y_min, x_max, y_max, batch_idx = torch.round(ROI[i] * self.scale).long()
-            batch_idx = batch_idx.clamp(0, feature_maps.size(0) - 1)
-            x_min = x_min.clamp(0, feature_maps.size(3) - 1)
-            y_min = y_min.clamp(0, feature_maps.size(2) - 1)
-            x_max = x_max.clamp(x_min, feature_maps.size(3))
-            y_max = y_max.clamp(y_min, feature_maps.size(2))
+        pooled_height, pooled_width = self.output_size
+        output = torch.zeros(num_rois, channels, pooled_height, pooled_width, dtype=feature_maps.dtype, device=feature_maps.device)
 
-            region_of_interest = feature_maps[batch_idx, :, y_min:y_max, x_min:x_max]
+        for i in range(num_rois):
+            x_min, y_min, x_max, y_max, batch_idx = rois[i] * self.spatial_scale
+            batch_idx = int(batch_idx)
 
-            f_map_height, f_map_width = region_of_interest.shape[-2:]
+            theta = torch.tensor([[[x_max - x_min, 0, x_min * 2.0 / feature_maps.size(3) - 1.0],
+                                   [0, y_max - y_min, y_min * 2.0 / feature_maps.size(2) - 1.0]]], device=feature_maps.device)
+            
+            grid_size = [1, channels, pooled_height, pooled_width]
 
-            bin_height = f_map_height / float(height)
-            bin_width = f_map_width / float(width)
+            grid = F.affine_grid(theta, grid_size, align_corners=False)
+            roi_feature_map = feature_maps[batch_idx, :, :].unsqueeze(0)
 
-            for h_pos in range(height): 
-                for w_pos in range(width): 
-                    start_x = int(math.floor(w_pos * bin_width))
-                    end_x = int(math.ceil((w_pos + 1) * bin_width))
-                    start_y = int(math.floor(h_pos * bin_height))
-                    end_y = int(math.ceil((h_pos + 1) * bin_height))
+            output[i] = F.grid_sample(roi_feature_map, grid, align_corners=False).squeeze(0)
 
-                    pool_region = region_of_interest[:, start_y:end_y, start_x:end_x]
-
-                    if pool_region.numel() == 0:
-                        output[i, :, h_pos, w_pos] = 0
-                    else:
-                        output[i, :, h_pos, w_pos] = F.avg_pool2d(
-                            pool_region, (end_y - start_y, end_x - start_x), stride=1, padding=0).view(-1)
-                        
         return output

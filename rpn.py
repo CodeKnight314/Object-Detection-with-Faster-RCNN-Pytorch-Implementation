@@ -94,7 +94,7 @@ class Regional_Proposal_Network(nn.Module):
             feature_map (torch.Tensor): Feature map from the backbone network with shape (batch_size, input_dimension, feature_map_height, feature_map_width).
 
         Returns:
-            torch.Tensor: Filtered proposals after applying NMS with shape (batch_size, num_filtered_proposals, 4).
+            torch.Tensor: Filtered proposals after applying NMS with shape (num_filtered_proposals, 5).
         """
         predict_cls, predict_bbox_deltas = self.rpn_head(feature_map)
         anchors = self.anchor_gen(image_list, feature_map)
@@ -109,6 +109,6 @@ class Regional_Proposal_Network(nn.Module):
         batch_index = torch.cat([torch.full((len(batch), 1), i) for i, batch in enumerate(filtered_anchors)], dim = 0).to(feature_map.device)
         
         roi = torch.cat([roi, batch_index], dim = 1)
-        cls = torch.cat([cls, batch_index], dim = 1)
+        cls = torch.cat([cls, batch_index], dim = 0)
         
         return roi
