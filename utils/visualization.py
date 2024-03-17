@@ -30,6 +30,8 @@ def draw_boundary_box(image_path : str, coordinates : Tuple[Tuple[int]], color :
     if output_directory:
         cv2.imwrite(output_directory,image)    
 
+    return image
+
 def crop_region_of_interest(image_path : str, coordinates : Tuple[int], output_directory : Union[str, None], show : bool = False):
 
     """
@@ -53,6 +55,8 @@ def crop_region_of_interest(image_path : str, coordinates : Tuple[int], output_d
     if output_directory:
         cv2.imwrite(output_directory,cropped_image)   
 
+    return cropped_image
+
 def add_gaussian_noise(image_path : str, mean : int, std : int, output_directory : Union[str, None], show : bool = False): 
     """
     """ 
@@ -73,4 +77,6 @@ def add_gaussian_noise(image_path : str, mean : int, std : int, output_directory
 
     if output_directory:
         cv2.imwrite(output_directory,gn_img)
+
+    return gn_img
 
