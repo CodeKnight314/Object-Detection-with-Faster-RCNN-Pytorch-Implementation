@@ -1,5 +1,5 @@
 import torch
-from typing import Tuple, List, Union
+from typing import List, Union, Tuple
 
 def calculate_iou(proposals: torch.Tensor, references: torch.Tensor) -> torch.Tensor:
     """
@@ -26,6 +26,30 @@ def calculate_iou(proposals: torch.Tensor, references: torch.Tensor) -> torch.Te
     # Calculate IoU
     iou = intersection_area / union_area
     return iou
+
+def calculate_iou_batch(proposals: torch.Tensor, references: List[torch.Tensor]): 
+  """
+  Calculate IOU for a batch of proposals with a batch of references.
+
+  Args: 
+      proposals (torch.Tensor): The proposal anchors with shape (batch, number of proposals, 4)
+      references (List[torch.Tensor]): A list of reference anchors with length batch, each with shape (number of references, 4)
+  
+  Returns: 
+      List[torch.Tensor]: A list of IOU matrices. Each element contains the IOU values with shape (number of proposals, number of references)
+  """
+  batch = [] 
+  
+  # Split into separate batches
+  for i in range(proposals.size(0)): 
+
+    # Reference specific batch for both proposals and references
+    prop, ref = proposals[i], references[i]
+
+    # Calculate and append the IOU matrix at the appropiate batch_index position
+    batch.append(calculate_iou(prop,ref))
+
+  return batch
 
 def bbox_encode(anchors: torch.Tensor, anchor_offsets: torch.Tensor) -> torch.Tensor:
     """
