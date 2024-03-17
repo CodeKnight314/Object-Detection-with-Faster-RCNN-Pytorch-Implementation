@@ -1,4 +1,5 @@
 import cv2 
+import numpy as np
 from typing import Tuple, Union
 
 def draw_boundary_box(image_path : str, coordinates : Tuple[Tuple[int]], color : Tuple[int], thickness : int,
@@ -50,4 +51,26 @@ def crop_region_of_interest(image_path : str, coordinates : Tuple[int], output_d
             cv2.destroyAllWindows()
 
     if output_directory:
-        cv2.imwrite(output_directory,cropped_image)    
+        cv2.imwrite(output_directory,cropped_image)   
+
+def add_gaussian_noise(image_path : str, mean : int, std : int, output_directory : Union[str, None], show : bool = False): 
+    """
+    """ 
+    image = cv2.imread(image_path)
+
+    gaussian_noise = np.zeros(image.shape, dtype = np.uint8)
+    
+    cv2.randn(gaussian_noise, mean=mean, std=std)
+    
+    gaussian_noise = (gaussian_noise * 0.5).astype(np.uint8)
+    
+    gn_img = cv2.add(image, gaussian_noise)
+    
+    if show: 
+            cv2.imshow(gn_img)
+            cv2.waitKey(0)
+            cv2.destroyAllWindows()
+
+    if output_directory:
+        cv2.imwrite(output_directory,gn_img)
+
