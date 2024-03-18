@@ -4,6 +4,7 @@ from utils.box_utils import calculate_iou_batch, calculate_iou
 from utils.box_utils import *
 import torch.nn.functional as F
 from typing import List
+import torch.optim as opt 
 
 class FasterRCNNLoss(nn.Module): 
     def __init__(self): 
@@ -106,3 +107,18 @@ class RPNLoss(nn.Module):
         total_loss = objectness_loss + bbox_loss
         
         return total_loss
+    
+def get_optimizer(model, lr : float, betas : Tuple[float], weight_decay : float): 
+    """
+    Helper function for defining optimizer 
+
+    Args: 
+        model : the model associated with the given optimizer 
+        lr (float): learning rate for the optimizer 
+        betas (Tuple[float]): a pair of floats
+        weight_decay (float): determine rate of weight decay
+
+    Returns:
+        torch.optim : optimizer with the given parameters
+    """
+    return opt.Adam(model.parameters(), lr = lr, betas=betas, weight_decay=weight_decay)
