@@ -122,3 +122,14 @@ def get_optimizer(model, lr : float, betas : Tuple[float], weight_decay : float)
         torch.optim : optimizer with the given parameters
     """
     return opt.Adam(model.parameters(), lr = lr, betas=betas, weight_decay=weight_decay)
+
+def get_scheduler(model, optimizer : torch.optim, step_size : int, gamma : float): 
+    """
+    Helper function for defining learning rate scheduler -> may try to define my own for fun but who knows?
+
+    Args: 
+        optimizer (torch.optim): optimizer associated with the given learning rate scheduler 
+        step_size (int): length of interval between each learning rate reduction 
+        gamme (float): the rate at which the optimizer's learning rate decreases. New learning rate = lr * gamma at each step size interval
+    """
+    return opt.lr_scheduler.StepLR(optimizer=optimizer, step_size=step_size, gamma=gamma)
