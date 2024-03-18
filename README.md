@@ -4,3 +4,4 @@ This is a pytorch implementation of Faster RCNN in the context of object detecti
 
 As I'm a high school senior currently, I can not guarantee that the code is properly formatted, written, or annotated (though I am trying my best). I am very slow in terms of picking things up so updating code snippets will be frequent and modules might be written poorly. If you have any feedback on how any particular parts of the code repository could be written more efficiently, feel free to contact me or leave a notice. The goal of this repository is to help me build a better understanding of object detection while learning to write better "production" worthy code so all feedback, however worded, is appreciated. 
 
+I also have a linked [Notion](https://www.notion.so/7da6e77b5e0c4e63a90566ca3dad5150?v=fa4a4337c1e44d67b1e7ad45ff1a0c0d&pvs=4) ticket system to keep track of items I need to work on. If you're ever curious, feel free to poke around. 
