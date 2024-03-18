@@ -33,7 +33,6 @@ def draw_boundary_box(image_path : str, coordinates : Tuple[Tuple[int]], color :
     return image
 
 def crop_region_of_interest(image_path : str, coordinates : Tuple[int], output_directory : Union[str, None], show : bool = False):
-
     """
     Crops image based on region of interest coordinates
 
@@ -59,6 +58,14 @@ def crop_region_of_interest(image_path : str, coordinates : Tuple[int], output_d
 
 def add_gaussian_noise(image_path : str, mean : int, std : int, output_directory : Union[str, None], show : bool = False): 
     """
+    Adds Gaussian Noise to a given image with a specified mean and standardeviation 
+
+    Args: 
+        image_path (str): direct directory to the image 
+        mean (int): mean distribution of gaussian noise 
+        std (int): standard deviation of the guassian noise distribution
+        output_directory (Union[str, None]): If directory is specified, image will be saved to specified directory
+        show (bool): Shows image and destroys window after pressing key
     """ 
     image = cv2.imread(image_path)
 
