@@ -1,6 +1,7 @@
 import torch 
 import torch.nn as nn 
 from utils.box_utils import calculate_iou_batch, calculate_iou
+from utils.box_utils import *
 import torch.nn.functional as F
 from typing import List
 
@@ -69,25 +70,39 @@ class RPNLoss(nn.Module):
         """
         return [box[positive_reference_index[i]] for i, box in enumerate(references)] 
 
-    def forward(self, cls_scores: torch.Tensor, proposals: torch.Tensor, references: List[torch.Tensor]): 
+    def forward(self, cls_scores: torch.Tensor, bbox_deltas: torch.Tensor, proposals: torch.Tensor, references: List[torch.Tensor]): 
         """
-        Compute Losses for classification and boundary box regression
+        Compute Losses for classification and bounding box regression.
 
         Args: 
             cls_scores (torch.Tensor): The predicted objectness score with shape (batch, number of proposals, 2)
+            bbox_deltas (torch.Tensor): The predicted bounding box deltas with shape (batch, number of proposals, 4)
             proposals (torch.Tensor): The proposal anchors with shape (batch, number of proposals, 4). 
             references (List[torch.Tensor]): List of ground truth boxes for each image in the batch. 
-                                             Each ground truth box is formatted as (number of references, 4)
-        
-        Returns: 
 
+        Returns: 
+            torch.Tensor: The total loss combining objectness and bbox regression losses.
         """  
         labels, maxed_iou_matrix, maxed_iou_index = self.generate_labels(proposals=proposals, references=references)
         
         mask = labels != -1 
         BCELoss = F.binary_cross_entropy(cls_scores[:, :, 1], labels, reduction='none') * mask 
-        BCELoss = BCELoss.sum() / mask.sum()
+        objectness_loss = BCELoss.sum() / mask.sum()
 
-        positive_proposals = proposals[labels == 1]
-        positive_iou_index = maxed_iou_index[labels == 1]
-        pass
+        positive_mask = labels == 1
+        if positive_mask.any():
+            positive_proposals = proposals[positive_mask]
+            positive_indices = torch.cat([idx[mask] for idx, mask in zip(maxed_iou_index, positive_mask)])
+            matched_gt_boxes = torch.cat([refs[idx] for refs, idx in zip(references, positive_indices)])
+            
+            regression_targets = bbox_decode(positive_proposals, matched_gt_boxes)
+
+            positive_deltas = bbox_deltas[positive_mask]
+
+            bbox_loss = F.smooth_l1_loss(positive_deltas, regression_targets, reduction='mean')
+        else:
+            bbox_loss = 0.0
+
+        total_loss = objectness_loss + bbox_loss
+        
+        return total_loss
