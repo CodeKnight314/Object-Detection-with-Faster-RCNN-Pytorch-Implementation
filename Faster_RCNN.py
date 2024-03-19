@@ -18,7 +18,7 @@ class Faster_RCNN(nn.Module):
         
         self.roi = ROIAlign(output_size=(7, 7), spatial_scale=1.0)
         
-        self.detector_cls = nn.Sequential(*[nn.Linear(self.rpn.proposal_Filter.max_proposals * 512 * self.roi.output_size[0] * self.roi.output_size[1], num_classes), nn.Dropout(0.3)])
+        self.detector_cls = nn.Sequential(*[nn.Linear(self.rpn.proposal_Filter.max_proposals * 512 * self.roi.output_size[0] * self.roi.output_size[1], num_classes), nn.Dropout(0.3), nn.Sigmoid()])
 
         self.detector_bbox = nn.Sequential(*[nn.Linear(self.rpn.proposal_Filter.max_proposals * 512 * self.roi.output_size[0] * self.roi.output_size[1], num_classes * 4), nn.Dropout(0.3)])
 
