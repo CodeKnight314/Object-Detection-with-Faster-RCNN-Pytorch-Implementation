@@ -75,15 +75,35 @@ def add_gaussian_noise(image_path : str, mean : int, std : int, output_directory
     
     gaussian_noise = (gaussian_noise * 0.5).astype(np.uint8)
     
-    gn_img = cv2.add(image, gaussian_noise)
+    image = cv2.add(image, gaussian_noise)
     
     if show: 
-            cv2.imshow(gn_img)
+            cv2.imshow(image)
             cv2.waitKey(0)
             cv2.destroyAllWindows()
 
     if output_directory:
-        cv2.imwrite(output_directory,gn_img)
+        cv2.imwrite(output_directory,image)
 
-    return gn_img
+    return image
+
+def add_uniform_noise(image_path : str, mean : int, std : int, output_directory : Union[str, None], lower_bound : int, upper_bound : int, show : bool = False):
+    image = cv2.imread(image_path)
+
+    uni_noise = np.zeros(image.shape, dtype = np.unint8)
+
+    cv2.randu(uni_noise, low=lower_bound, high=upper_bound)
+
+    image = cv2.add(image, uni_noise)
+
+    if show: 
+            cv2.imshow(image)
+            cv2.waitKey(0)
+            cv2.destroyAllWindows()
+
+    if output_directory:
+        cv2.imwrite(output_directory,image)
+
+    return image
+
 
