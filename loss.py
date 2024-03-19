@@ -8,13 +8,65 @@ import torch.optim as opt
 
 class FasterRCNNLoss(nn.Module): 
     def __init__(self): 
-        pass 
+        super(FasterRCNNLoss, self).__init__()
 
     def __compute_Loss__(self): 
         pass 
 
-    def forward(self, x): 
-        pass
+    def generate_labels(self, proposals: torch.Tensor, references: List[torch.Tensor]):
+        """
+        Generate labels for proposals based on IoU with ground truth boxes.
+
+        Args:
+            proposals (torch.Tensor): The proposal anchors with shape (batch, number of proposals, 4).
+            references (List[torch.Tensor]): List of ground truth boxes for each image in the batch.
+        
+        Returns:
+            torch.Tensor: Labels for each proposal in the batch.
+            List[torch.Tensor]: Maximum IOU value of each proposal against all ground truth box. ()
+            List[torch.Tensor]: Maximum IOU index of each proposal, indicating which gt box has 
+                          the highest IOU value with the respective proposal.
+        """
+        N, P, _ = proposals.shape
+
+        iou_matrix = calculate_iou_batch(proposals=proposals, references=references)
+        maxed_iou_matrix = []
+        maxed_iou_index = []
+
+        for item in iou_matrix: 
+            max_iou, max_idx = item.max(dim=1)
+            maxed_iou_matrix.append(max_iou)
+            maxed_iou_index.append(max_idx)
+        
+        maxed_matrix = torch.stack(maxed_iou_matrix)
+
+        labels = torch.full((N, P), -1, dtype=torch.float32, device=proposals.device)  # Ensure labels are float
+        labels[maxed_matrix > self.positive_iou_anchor] = 1
+        labels[maxed_matrix < self.negative_iou_anchor] = 0
+
+        return labels, maxed_iou_matrix, maxed_iou_index
+    
+    def match_gt_to_box(positive_reference_index : List[torch.Tensor], references : List[torch.Tensor]): 
+        """
+        """
+        return [box[positive_reference_index[i]] for i, box in enumerate(references)] 
+
+    def forward(self, frcnn_cls : torch.Tensor, frcnn_bbox : torch.Tensor, frcnn_labels : torch.Tensor, frcnn_gt_bbox : List[torch.Tensor]): 
+        """
+        Compute Losses for classification and bounding box regression
+
+        Args: 
+            frcnn_cls (torch.Tensor): In the shape of (batch_number, number of proposals, number of classes)
+            frcnn_bbox (torch.Tensor): In the shape of (batch_number, number of proposals, number of classes * 4)
+            frcnn_labels (List[torch.Tensor]): A list of torch.tensors with shape (number of references, ), length of batch_number
+            frcnn_gt_box (List[torch.Tensor]): A list of torch.tensors with shape (number of references, 4), length of batch_number
+        """
+
+        labels, maxed_iou_matrix, maxed_iou_index = self.generate_labels(proposals=frcnn_bbox, references=frcnn_gt_bbox)
+
+        _, predictions = frcnn_cls.max(dim=2)
+
+        gt_bbox = self.match_gt_to_box(predictions, frcnn_gt_bbox)
 
 class RPNLoss(nn.Module): 
     def __init__(self, positive_iou_threshold=0.7, negative_iou_threshold=0.3):
@@ -31,7 +83,8 @@ class RPNLoss(nn.Module):
             references (List[torch.Tensor]): List of ground truth boxes for each image in the batch.
         
         Returns:
-            torch.Tensor: Labels for each proposal in the batch.
+            torch.Tensor: Labels for each proposal in the batch. (batch_number, number of proposals)
+            List[torch.Tensor]: Maximum IOU value of each proposal against all ground truth box.
             List[torch.Tensor]: Maximum IOU index of each proposal, indicating which gt box has 
                                 the highest IOU value with the respective proposal.
         """
@@ -52,7 +105,7 @@ class RPNLoss(nn.Module):
         labels[maxed_matrix > self.positive_iou_anchor] = 1
         labels[maxed_matrix < self.negative_iou_anchor] = 0
 
-        return labels, maxed_iou_index
+        return labels, maxed_iou_matrix, maxed_iou_index
     
     def match_gt_to_box(self, positive_reference_index : List[torch.Tensor], references : List[torch.Tensor]):
         """
@@ -82,7 +135,7 @@ class RPNLoss(nn.Module):
         Returns: 
             torch.Tensor: The total loss combining objectness and bbox regression losses.
         """  
-        labels, maxed_iou_index = self.generate_labels(proposals=proposals, references=references)
+        labels, maxed_iou_matrix, maxed_iou_index = self.generate_labels(proposals=proposals, references=references)
         
         mask = labels != -1 
         BCELoss = F.binary_cross_entropy(cls_scores[:, :, 1], labels, reduction='none') * mask 
