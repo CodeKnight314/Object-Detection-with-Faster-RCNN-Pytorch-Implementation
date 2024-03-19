@@ -1,6 +1,9 @@
 import cv2 
 import numpy as np
 from typing import Tuple, Union
+from glob import glob 
+from tqdm import tqdm 
+import os
 
 def draw_boundary_box(image_path : str, coordinates : Tuple[Tuple[int]], color : Tuple[int], thickness : int,
                       output_directory : Union[str, None], show : bool = False): 
@@ -114,7 +117,7 @@ def add_impulse_noise(image_path : str, output_directory : Union[str, None], low
     cv2.randu(imp_noise, low=lower_bound, high=upper_bound)
     
     imp_noise = cv2.threshold(imp_noise,245,255,cv2.THRESH_BINARY)[1]
-    
+
     image = cv2.add(image, imp_noise)
 
     if show: 
@@ -127,4 +130,25 @@ def add_impulse_noise(image_path : str, output_directory : Union[str, None], low
 
     return image
 
-
+def batch_noise(root_dir : str, output_dir : Union[str, None], show : bool = False, mode : str = "gaussian", **kwargs):
+    image_paths = glob(os.path.join(root_dir, "/*"))
+    if mode.lower() == "gaussian":           
+        for image in tqdm(image_paths): 
+            add_gaussian_noise(image_path=image, 
+                               output_directory=os.path.join(output_dir, os.path.basename(image).split("/")[-1]), 
+                               mean = kwargs['mean'], std=kwargs['std'], 
+                               show=False)
+    elif mode.lower() == "uniform": 
+        for image in tqdm(image_paths): 
+            add_uniform_noise(image_path=image, 
+                              output_directory=os.path.join(output_dir, os.path.basename(image).split("/")[-1]),
+                              lower_bound=kwargs['lower_bound'], upper_bound=kwargs['upper_bound'], 
+                              show=False)
+    elif mode.lower() == "impulse":
+        for image in tqdm(image_paths): 
+            add_uniform_noise(image_path=image, 
+                              output_directory=os.path.join(output_dir, os.path.basename(image).split("/")[-1]),
+                              lower_bound=kwargs['lower_bound'], upper_bound=kwargs['upper_bound'], 
+                              show=False)
+    else: 
+        raise ValueError(f"[Error] Invalid mode. {mode} is not available as a noise mode.")
