@@ -1,6 +1,9 @@
 import cv2 
 import numpy as np
 from typing import Tuple, Union
+from glob import glob 
+from tqdm import tqdm 
+import os
 
 def draw_boundary_box(image_path : str, coordinates : Tuple[Tuple[int]], color : Tuple[int], thickness : int,
                       output_directory : Union[str, None], show : bool = False): 
@@ -75,15 +78,98 @@ def add_gaussian_noise(image_path : str, mean : int, std : int, output_directory
     
     gaussian_noise = (gaussian_noise * 0.5).astype(np.uint8)
     
-    gn_img = cv2.add(image, gaussian_noise)
+    image = cv2.add(image, gaussian_noise)
     
     if show: 
-            cv2.imshow(gn_img)
+            cv2.imshow(image)
             cv2.waitKey(0)
             cv2.destroyAllWindows()
 
     if output_directory:
-        cv2.imwrite(output_directory,gn_img)
+        cv2.imwrite(output_directory,image)
 
-    return gn_img
+    return image
 
+def add_uniform_noise(image_path : str, output_directory : Union[str, None], lower_bound : int, upper_bound : int, show : bool = False):
+    """
+    Adds Uniform Noise to a given image with a specified lower and upper bound. 
+
+    Args: 
+        image_path (str): direct directory to the image 
+        lower_bound (int): lower bound of the uniform distribution
+        upper_bound (int): upper bound of the uniform distribution
+        output_directory (Union[str, None]): If directory is specified, image will be saved to specified directory
+        show (bool): Shows image and destroys window after pressing key
+    """
+    image = cv2.imread(image_path)
+
+    uni_noise = np.zeros(image.shape, dtype = np.unint8)
+
+    cv2.randu(uni_noise, low=lower_bound, high=upper_bound)
+
+    image = cv2.add(image, uni_noise)
+
+    if show: 
+            cv2.imshow(image)
+            cv2.waitKey(0)
+            cv2.destroyAllWindows()
+
+    if output_directory:
+        cv2.imwrite(output_directory,image)
+
+    return image
+
+def add_impulse_noise(image_path : str, output_directory : Union[str, None], lower_bound : int, upper_bound : int, show : bool = False):
+    """
+    Adds Impulse Noise (Pepper Noise) to a given image.
+    
+    Args: 
+        image_path (str): direct directory to the image 
+        lower_bound (int): lower bound of the uniform distribution
+        upper_bound (int): upper bound of the uniform distribution
+        output_directory (Union[str, None]): If directory is specified, image will be saved to specified directory
+        show (bool): Shows image and destroys window after pressing key
+
+    """
+    image = cv2.imread(image_path)
+
+    imp_noise = np.zeros(image.shape, dtype = np.unint8)
+
+    cv2.randu(imp_noise, low=lower_bound, high=upper_bound)
+    
+    imp_noise = cv2.threshold(imp_noise,245,255,cv2.THRESH_BINARY)[1]
+
+    image = cv2.add(image, imp_noise)
+
+    if show: 
+            cv2.imshow(image)
+            cv2.waitKey(0)
+            cv2.destroyAllWindows()
+
+    if output_directory:
+        cv2.imwrite(output_directory,image)
+
+    return image
+
+def batch_noise(root_dir : str, output_dir : Union[str, None], show : bool = False, mode : str = "gaussian", **kwargs):
+    image_paths = glob(os.path.join(root_dir, "/*"))
+    if mode.lower() == "gaussian":           
+        for image in tqdm(image_paths): 
+            add_gaussian_noise(image_path=image, 
+                               output_directory=os.path.join(output_dir, os.path.basename(image).split("/")[-1]), 
+                               mean = kwargs['mean'], std=kwargs['std'], 
+                               show=False)
+    elif mode.lower() == "uniform": 
+        for image in tqdm(image_paths): 
+            add_uniform_noise(image_path=image, 
+                              output_directory=os.path.join(output_dir, os.path.basename(image).split("/")[-1]),
+                              lower_bound=kwargs['lower_bound'], upper_bound=kwargs['upper_bound'], 
+                              show=False)
+    elif mode.lower() == "impulse":
+        for image in tqdm(image_paths): 
+            add_uniform_noise(image_path=image, 
+                              output_directory=os.path.join(output_dir, os.path.basename(image).split("/")[-1]),
+                              lower_bound=kwargs['lower_bound'], upper_bound=kwargs['upper_bound'], 
+                              show=False)
+    else: 
+        raise ValueError(f"[Error] Invalid mode. {mode} is not available as a noise mode.")

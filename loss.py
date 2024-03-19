@@ -32,12 +32,10 @@ class RPNLoss(nn.Module):
         
         Returns:
             torch.Tensor: Labels for each proposal in the batch.
-            List[torch.Tensor]: Maximum IOU value of each proposal against all ground truth box. ()
             List[torch.Tensor]: Maximum IOU index of each proposal, indicating which gt box has 
-                          the highest IOU value with the respective proposal.
+                                the highest IOU value with the respective proposal.
         """
         N, P, _ = proposals.shape
-
 
         iou_matrix = calculate_iou_batch(proposals=proposals, references=references)
         maxed_iou_matrix = []
@@ -54,7 +52,7 @@ class RPNLoss(nn.Module):
         labels[maxed_matrix > self.positive_iou_anchor] = 1
         labels[maxed_matrix < self.negative_iou_anchor] = 0
 
-        return labels, maxed_iou_matrix, maxed_iou_index
+        return labels, maxed_iou_index
     
     def match_gt_to_box(self, positive_reference_index : List[torch.Tensor], references : List[torch.Tensor]):
         """
@@ -84,7 +82,7 @@ class RPNLoss(nn.Module):
         Returns: 
             torch.Tensor: The total loss combining objectness and bbox regression losses.
         """  
-        labels, maxed_iou_matrix, maxed_iou_index = self.generate_labels(proposals=proposals, references=references)
+        labels, maxed_iou_index = self.generate_labels(proposals=proposals, references=references)
         
         mask = labels != -1 
         BCELoss = F.binary_cross_entropy(cls_scores[:, :, 1], labels, reduction='none') * mask 
@@ -123,7 +121,7 @@ def get_optimizer(model, lr : float, betas : Tuple[float], weight_decay : float)
     """
     return opt.Adam(model.parameters(), lr = lr, betas=betas, weight_decay=weight_decay)
 
-def get_scheduler(model, optimizer : torch.optim, step_size : int, gamma : float): 
+def get_scheduler(optimizer : torch.optim, step_size : int, gamma : float): 
     """
     Helper function for defining learning rate scheduler -> may try to define my own for fun but who knows?
 
