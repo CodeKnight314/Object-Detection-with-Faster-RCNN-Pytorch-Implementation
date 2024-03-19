@@ -38,7 +38,6 @@ class RPNLoss(nn.Module):
         """
         N, P, _ = proposals.shape
 
-
         iou_matrix = calculate_iou_batch(proposals=proposals, references=references)
         maxed_iou_matrix = []
         maxed_iou_index = []
@@ -123,7 +122,7 @@ def get_optimizer(model, lr : float, betas : Tuple[float], weight_decay : float)
     """
     return opt.Adam(model.parameters(), lr = lr, betas=betas, weight_decay=weight_decay)
 
-def get_scheduler(model, optimizer : torch.optim, step_size : int, gamma : float): 
+def get_scheduler(optimizer : torch.optim, step_size : int, gamma : float): 
     """
     Helper function for defining learning rate scheduler -> may try to define my own for fun but who knows?
 
