@@ -91,6 +91,16 @@ def add_gaussian_noise(image_path : str, mean : int, std : int, output_directory
     return image
 
 def add_uniform_noise(image_path : str, output_directory : Union[str, None], lower_bound : int, upper_bound : int, show : bool = False):
+    """
+    Adds Uniform Noise to a given image with a specified lower and upper bound. 
+
+    Args: 
+        image_path (str): direct directory to the image 
+        lower_bound (int): lower bound of the uniform distribution
+        upper_bound (int): upper bound of the uniform distribution
+        output_directory (Union[str, None]): If directory is specified, image will be saved to specified directory
+        show (bool): Shows image and destroys window after pressing key
+    """
     image = cv2.imread(image_path)
 
     uni_noise = np.zeros(image.shape, dtype = np.unint8)
@@ -110,6 +120,17 @@ def add_uniform_noise(image_path : str, output_directory : Union[str, None], low
     return image
 
 def add_impulse_noise(image_path : str, output_directory : Union[str, None], lower_bound : int, upper_bound : int, show : bool = False):
+    """
+    Adds Impulse Noise (Pepper Noise) to a given image.
+    
+    Args: 
+        image_path (str): direct directory to the image 
+        lower_bound (int): lower bound of the uniform distribution
+        upper_bound (int): upper bound of the uniform distribution
+        output_directory (Union[str, None]): If directory is specified, image will be saved to specified directory
+        show (bool): Shows image and destroys window after pressing key
+
+    """
     image = cv2.imread(image_path)
 
     imp_noise = np.zeros(image.shape, dtype = np.unint8)
