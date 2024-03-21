@@ -7,8 +7,10 @@ from typing import List
 import torch.optim as opt 
 
 class FasterRCNNLoss(nn.Module): 
-    def __init__(self): 
+    def __init__(self, positive_iou_threshold : float, negative_iou_threshold : float): 
         super(FasterRCNNLoss, self).__init__()
+        self.positive_iou_anchor = positive_iou_threshold 
+        self.negative_iou_anchor = negative_iou_threshold
 
     def generate_labels(self, proposal: torch.Tensor, reference: torch.Tensor):
         """
@@ -210,3 +212,22 @@ def get_scheduler(optimizer : torch.optim, step_size : int, gamma : float):
         gamme (float): the rate at which the optimizer's learning rate decreases. New learning rate = lr * gamma at each step size interval
     """
     return opt.lr_scheduler.StepLR(optimizer=optimizer, step_size=step_size, gamma=gamma)
+
+def get_loss_functions(iou_thresholds : Tuple[int, int]):
+    """
+    Helper function for defining RPN & Faster RCNN loss calculation class 
+
+    Args: 
+        iou_thresholds (Tuple[int]): Contains two iou threshold values, one for positive and negative, respectively.
+    
+    Returns: 
+        RPNLoss : loss calculation class for RPN outputs 
+        FasterRCNNLoss : loss calculation class for Faster RCNN
+    """
+    assert len(iou_thresholds) == 2,f"[Error] Expected 2 iou threshold values but receievd {len(iou_thresholds)}"
+    positive_iou_threshold, negative_iou_threshold = iou_thresholds
+
+    rpn_loss = RPNLoss(positive_iou_threshold=positive_iou_threshold, negative_iou_threshold=negative_iou_threshold)
+    frcnn_loss = FasterRCNNLoss(positive_iou_threshold=positive_iou_threshold, negative_iou_threshold=negative_iou_threshold)
+
+    return rpn_loss, frcnn_loss
