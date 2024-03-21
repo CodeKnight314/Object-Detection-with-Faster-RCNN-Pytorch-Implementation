@@ -94,3 +94,28 @@ class AnchorGenerator(nn.Module):
 
         all_anchors = scaled_anchors.view(1, -1, 4) + shifts.view(-1, 1, 4)
         return all_anchors.view(-1, 4)
+    
+def main(): 
+
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+
+    batch_idx = 16 
+    channels = 3 
+    img_height = 640 
+    img_width = 640 
+
+    f_channels = 512 
+    f_height = 20 
+    f_width = 20 
+
+    img = torch.rand((batch_idx, channels, img_height, img_width), dtype = torch.float32, device = device)
+    f_map = torch.rand((batch_idx, f_channels, f_height, f_width), dtype = torch.float32, device = device)
+
+    anchorGen = AnchorGenerator(sizes=(128,256,512), aspect_ratios=(0.5,1,2))
+
+    anchors = anchorGen(img, f_map)
+
+    print(anchors.shape)
+
+if __name__ == "__main__": 
+    main()
