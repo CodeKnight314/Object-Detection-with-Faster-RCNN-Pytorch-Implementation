@@ -124,3 +124,24 @@ class ProposalFilter(nn.Module):
         union_area = proposal_area + proposals_area - inter_area
 
         return inter_area, union_area
+    
+def main(): 
+    batch_idx = 16
+    num_of_proposals = 20 
+    num_of_classes = 21 
+
+    rpn_bbox = torch.rand((batch_idx, num_of_proposals, 4), dtype = torch.int64, device = "cuda" if torch.cuda.is_available() else "cpu")
+    rpn_cls = torch.rand((batch_idx, num_of_proposals, num_of_classes), dtype = torch.float32, device = "cuda" if torch.cuda.is_available() else "cpu")
+
+    proposal_filter = ProposalFilter(iou_threshold=0.7, 
+                                     min_size=16, 
+                                     score_threshold=0.5,
+                                     max_proposals=100)
+    
+    filtered_bbox, fitlered_cls = proposal_filter(rpn_bbox, rpn_cls)
+
+    print(filtered_bbox)
+    print(fitlered_cls)
+
+if __name__ == "__main__": 
+    main()
