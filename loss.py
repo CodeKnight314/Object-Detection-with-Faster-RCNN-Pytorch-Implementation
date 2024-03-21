@@ -5,6 +5,7 @@ from utils.box_utils import *
 import torch.nn.functional as F
 from typing import List
 import torch.optim as opt 
+import random 
 
 class FasterRCNNLoss(nn.Module): 
     def __init__(self, positive_iou_threshold : float, negative_iou_threshold : float): 
@@ -231,3 +232,39 @@ def get_loss_functions(iou_thresholds : Tuple[int, int]):
     frcnn_loss = FasterRCNNLoss(positive_iou_threshold=positive_iou_threshold, negative_iou_threshold=negative_iou_threshold)
 
     return rpn_loss, frcnn_loss
+
+def main(): 
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+
+    batch_idx = 16 
+    num_of_proposals = 300 
+    num_of_classes = 21
+
+    rpn_loss, frcnn_loss = get_loss_functions() 
+
+    rpn_cls = torch.rand((batch_idx, num_of_proposals, 2), dtype = torch.float32, device = device) 
+
+    rpn_bbox = torch.rand((batch_idx, num_of_proposals, 4), dtype = torch.float32, device = device) * 32
+
+    anchors = torch.rand((batch_idx, num_of_proposals, 4), dtype = torch.float32, device = device)
+
+    references = [torch.rand((random.randint(1, 10), 4), dtype = torch.int64, device = device) for _ in range(batch_idx)]
+
+    total_loss_rpn = rpn_loss(rpn_cls, rpn_bbox, anchors, references)
+
+    print(total_loss_rpn.item())
+
+    frcnn_cls = torch.rand((batch_idx, num_of_proposals, num_of_classes), dtype = torch.float32, device = device) 
+
+    frcnn_bbox = torch.rand((batch_idx, num_of_proposals, num_of_classes * 4), dtype = torch.int64, device = device)
+
+    frcnn_labels = [torch.rand((10, 1), dtype = torch.int64, device = device) for _ in range(batch_idx)]
+
+    frcnn_gt_bbox= [torch.rand((10, 4), dtype = torch.int64, device = device) for _ in range(batch_idx)]
+
+    total_loss, avg_classification_loss, avg_regression_loss = frcnn_loss(frcnn_cls, frcnn_bbox, frcnn_labels, frcnn_gt_bbox)
+
+    print(total_loss.item())
+
+if __name__ == "__main__": 
+    main()
