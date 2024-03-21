@@ -50,3 +50,26 @@ class Faster_RCNN(nn.Module):
         bbox = self.detector_bbox(pooled_features)
 
         return cls_label, bbox
+    
+def main(): 
+    batch_idx = 16 
+    image_channel = 3 
+    image_height = 640 
+    image_width = 640 
+
+    num_of_classes = 10
+
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+
+    image = torch.rand((batch_idx, image_channel, image_height, image_width), dtype = torch.float32, device = device)
+
+    model = Faster_RCNN(num_of_classes).to(device)
+
+    cls_labels, bboxes = model(image)
+
+    print(cls_labels.shape)
+
+    print(bboxes.shape)
+
+if __name__ == "__main__": 
+    main()
