@@ -48,8 +48,7 @@ class FasterRCNNLoss(nn.Module):
             frcnn_labels (List[torch.Tensor]): A list of torch.tensors with shape (number of references, ), length of batch_number
             frcnn_gt_box (List[torch.Tensor]): A list of torch.tensors with shape (number of references, 4), length of batch_number
         
-        Returns: 
-            
+
         """
 
         predictions, frcnn_cls_bbox = self.select_frcnn_bbox_from_cls(frcnn_cls=frcnn_cls, frcnn_bbox=frcnn_bbox)
