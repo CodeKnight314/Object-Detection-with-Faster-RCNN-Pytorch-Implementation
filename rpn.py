@@ -83,7 +83,7 @@ class Regional_Proposal_Network(nn.Module):
 
         self.rpn_head = RPN_head(input_dimensions=input_dimension, mid_channels=mid_dimension, num_anchors=self.num_anchors, conv_depth=conv_depth)
 
-        self.proposal_Filter = ProposalFilter(iou_threshold=0.5, min_size=10, score_threshold=0.5, max_proposals=100)
+        self.proposal_Filter = ProposalFilter(iou_threshold=0.5, min_size=10, score_threshold=0.5, max_proposals=1000)
 
     def forward(self, image_list: torch.Tensor, feature_map: torch.Tensor) -> torch.Tensor:
         """
@@ -109,3 +109,29 @@ class Regional_Proposal_Network(nn.Module):
         
         roi = torch.cat([roi, batch_index], dim = 1)
         return roi
+
+def main():
+  """
+  Main function for rpn.py. Runs a test instance to verify the framework's output shape
+  """ 
+  batch_idx = 16
+
+  image_channels = 3 
+  height = 640 
+  width = 640
+
+  feature_map_dim = 512
+  f_map_height = 16 
+  f_map_width = 16
+
+  image_list = torch.rand((batch_idx, image_channels, height, width), dtype = torch.float32, device = "cuda" if torch.cuda.is_available() else "cpu")
+  feature_map = torch.rand((batch_idx, feature_map_dim, f_map_height, f_map_width), dtype = torch.float32, device = "cuda" if torch.cuda.is_available() else "cpu")
+
+  rpn = Regional_Proposal_Network(512, 512, 3, 0.5, 0.5, 16, 1000, (128, 256, 512), (0.5, 1, 2)) 
+
+  output = rpn(image_list, feature_map)
+
+  print(output.shape)
+
+if __name__ == "__main__": 
+  main()
