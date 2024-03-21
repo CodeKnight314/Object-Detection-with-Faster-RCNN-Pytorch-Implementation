@@ -13,43 +13,30 @@ class FasterRCNNLoss(nn.Module):
     def __compute_Loss__(self): 
         pass 
 
-    def generate_labels(self, proposals: torch.Tensor, references: List[torch.Tensor]):
+    def select_frcnn_bbox_from_cls(self, frcnn_cls : torch.Tensor, frcnn_bbox : torch.Tensor):
         """
-        Generate labels for proposals based on IoU with ground truth boxes.
+        Select Faster RCNN Boundary Box. 
 
-        Args:
-            proposals (torch.Tensor): The proposal anchors with shape (batch, number of proposals, 4).
-            references (List[torch.Tensor]): List of ground truth boxes for each image in the batch.
+        Args: 
+            frcnn_cls (torch.Tensor): In the shape of (batch number, number of proposals, number of classes)
+            frcnn_bbox (torch.Tensor): In the shape of (batch number, number of proposals, number of classes * 4)
         
-        Returns:
-            torch.Tensor: Labels for each proposal in the batch.
-            List[torch.Tensor]: Maximum IOU value of each proposal against all ground truth box. ()
-            List[torch.Tensor]: Maximum IOU index of each proposal, indicating which gt box has 
-                          the highest IOU value with the respective proposal.
+        Returns: 
+            prediction (torch.Tensor): In the shape of (batch number, number of proposal)
+            frcnn_bbox (torch.Tensor): In the shape of (batch number, number of proposal, 4)
         """
-        N, P, _ = proposals.shape
 
-        iou_matrix = calculate_iou_batch(proposals=proposals, references=references)
-        maxed_iou_matrix = []
-        maxed_iou_index = []
+        N, P, _ = frcnn_cls.shape 
 
-        for item in iou_matrix: 
-            max_iou, max_idx = item.max(dim=1)
-            maxed_iou_matrix.append(max_iou)
-            maxed_iou_index.append(max_idx)
-        
-        maxed_matrix = torch.stack(maxed_iou_matrix)
+        _, prediction = frcnn_cls.max(dim=2)
 
-        labels = torch.full((N, P), -1, dtype=torch.float32, device=proposals.device)  # Ensure labels are float
-        labels[maxed_matrix > self.positive_iou_anchor] = 1
-        labels[maxed_matrix < self.negative_iou_anchor] = 0
+        batch_idx = torch.arange(N).view(-1, 1).expand(-1, P).reshape(-1)
 
-        return labels, maxed_iou_matrix, maxed_iou_index
-    
-    def match_gt_to_box(positive_reference_index : List[torch.Tensor], references : List[torch.Tensor]): 
-        """
-        """
-        return [box[positive_reference_index[i]] for i, box in enumerate(references)] 
+        proposals = torch.arange(P).repeat(batch_idx)
+
+        frcnn_bbox = frcnn_bbox[batch_idx, proposals, prediction.view(-1)].view(N, P, 4)
+
+        return prediction, frcnn_bbox
 
     def forward(self, frcnn_cls : torch.Tensor, frcnn_bbox : torch.Tensor, frcnn_labels : torch.Tensor, frcnn_gt_bbox : List[torch.Tensor]): 
         """
@@ -60,13 +47,14 @@ class FasterRCNNLoss(nn.Module):
             frcnn_bbox (torch.Tensor): In the shape of (batch_number, number of proposals, number of classes * 4)
             frcnn_labels (List[torch.Tensor]): A list of torch.tensors with shape (number of references, ), length of batch_number
             frcnn_gt_box (List[torch.Tensor]): A list of torch.tensors with shape (number of references, 4), length of batch_number
+        
+        Returns: 
+            
         """
 
-        labels, maxed_iou_matrix, maxed_iou_index = self.generate_labels(proposals=frcnn_bbox, references=frcnn_gt_bbox)
+        predictions, frcnn_cls_bbox = self.select_frcnn_bbox_from_cls(frcnn_cls=frcnn_cls, frcnn_bbox=frcnn_bbox)
 
-        _, predictions = frcnn_cls.max(dim=2)
-
-        gt_bbox = self.match_gt_to_box(predictions, frcnn_gt_bbox)
+        pass
 
 class RPNLoss(nn.Module): 
     def __init__(self, positive_iou_threshold=0.7, negative_iou_threshold=0.3):
