@@ -111,29 +111,29 @@ class Regional_Proposal_Network(nn.Module):
         return roi
 
 def main():
-  """
-  Main function for rpn.py. Runs a test instance to verify the framework's output shape
-  """ 
-  batch_idx = 16
+    """
+    Main function for rpn.py. Runs a test instance to verify the framework's output shape
+    """ 
+    batch_idx = 16
 
-  image_channels = 3 
-  height = 640 
-  width = 640
+    image_channels = 3 
+    height = 640 
+    width = 640
 
-  feature_map_dim = 512
-  f_map_height = 16 
-  f_map_width = 16
+    feature_map_dim = 512
+    f_map_height = 16 
+    f_map_width = 16
 
-  device = "cuda" if torch.cuda.is_available() else "cpu"
+    device = "cuda" if torch.cuda.is_available() else "cpu"
 
-  image_list = torch.rand((batch_idx, image_channels, height, width), dtype = torch.float32, device = device)
-  feature_map = torch.rand((batch_idx, feature_map_dim, f_map_height, f_map_width), dtype = torch.float32, device = device)
+    image_list = torch.rand((batch_idx, image_channels, height, width), dtype = torch.float32, device = device)
+    feature_map = torch.rand((batch_idx, feature_map_dim, f_map_height, f_map_width), dtype = torch.float32, device = device)
 
-  rpn = Regional_Proposal_Network(512, 512, 3, 0.5, 0.5, 16, 1000, (128, 256, 512), (0.5, 1, 2)).to(device)
+    rpn = Regional_Proposal_Network(512, 512, 3, 0.5, 0.5, 16, 1000, (128, 256, 512), (0.5, 1, 2)).to(device)
 
-  output = rpn(image_list, feature_map)
+    output = rpn(image_list, feature_map)
 
-  print(output.shape)
+    print(output.shape)
 
 if __name__ == "__main__": 
   main()
