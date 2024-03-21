@@ -10,23 +10,40 @@ class FasterRCNNLoss(nn.Module):
     def __init__(self): 
         super(FasterRCNNLoss, self).__init__()
 
-    def __compute_Loss__(self): 
-        pass 
+    def generate_labels(self, proposal: torch.Tensor, reference: torch.Tensor):
+        """
+        Generate labels for proposals based on IoU with ground truth boxes.
+
+        Args:
+            proposals (torch.Tensor): The proposal anchors with shape (number of proposals, 4).
+            references (torch.Tensor): List of ground truth boxes for each image in the batch. (number of references, )
+
+        Returns:
+            torch.Tensor: Labels for each proposal in the batch.
+            List[torch.Tensor]: Maximum IOU value of each proposal against all ground truth box. ()
+            List[torch.Tensor]: Maximum IOU index of each proposal, indicating which gt box has
+                          the highest IOU value with the respective proposal.
+        """
+        N, P, _ = proposal.shape
+
+        labels = torch.zeros(P, dtype = torch.long, device = proposal.device)
+
+        if reference.numel() == 0:
+          return labels
+
+        iou_matrix = calculate_iou(proposal, reference)
+
+        max_value, max_index = iou_matrix.max(dim = 1)
+
+        labels[max_value >= self.positive_iou_anchor] = reference[max_index[max_value >= self.positive_iou_anchor]]
+
+        return labels
 
     def select_frcnn_bbox_from_cls(self, frcnn_cls : torch.Tensor, frcnn_bbox : torch.Tensor):
         """
-        Select Faster RCNN Boundary Box. 
-
-        Args: 
-            frcnn_cls (torch.Tensor): In the shape of (batch number, number of proposals, number of classes)
-            frcnn_bbox (torch.Tensor): In the shape of (batch number, number of proposals, number of classes * 4)
-        
-        Returns: 
-            prediction (torch.Tensor): In the shape of (batch number, number of proposal)
-            frcnn_bbox (torch.Tensor): In the shape of (batch number, number of proposal, 4)
         """
 
-        N, P, _ = frcnn_cls.shape 
+        N, P, _ = frcnn_cls.shape
 
         _, prediction = frcnn_cls.max(dim=2)
 
@@ -38,22 +55,44 @@ class FasterRCNNLoss(nn.Module):
 
         return prediction, frcnn_bbox
 
-    def forward(self, frcnn_cls : torch.Tensor, frcnn_bbox : torch.Tensor, frcnn_labels : torch.Tensor, frcnn_gt_bbox : List[torch.Tensor]): 
+    def forward(self, frcnn_cls : torch.Tensor, frcnn_bbox : torch.Tensor, frcnn_labels : torch.Tensor, frcnn_gt_bbox : List[torch.Tensor]):
         """
         Compute Losses for classification and bounding box regression
 
-        Args: 
+        Args:
             frcnn_cls (torch.Tensor): In the shape of (batch_number, number of proposals, number of classes)
             frcnn_bbox (torch.Tensor): In the shape of (batch_number, number of proposals, number of classes * 4)
             frcnn_labels (List[torch.Tensor]): A list of torch.tensors with shape (number of references, ), length of batch_number
             frcnn_gt_box (List[torch.Tensor]): A list of torch.tensors with shape (number of references, 4), length of batch_number
-        
-
         """
+        predictions, frcnn_bbox = self.select_frcnn_bbox_from_cls(frcnn_cls=frcnn_cls, frcnn_bbox=frcnn_bbox)
 
-        predictions, frcnn_cls_bbox = self.select_frcnn_bbox_from_cls(frcnn_cls=frcnn_cls, frcnn_bbox=frcnn_bbox)
+        batch_size = frcnn_cls.size(0)
+        total_classification_loss = 0
+        total_regression_loss = 0
 
-        pass
+        for i in range(batch_size):
+            proposal = frcnn_bbox[i]
+            reference = frcnn_gt_bbox[i]
+            labels = self.generate_labels(proposal, reference)
+
+            cls_loss = F.cross_entropy(frcnn_cls[i], labels)
+            total_classification_loss += cls_loss
+
+            pos_indices = labels > 0  
+            if pos_indices.any():
+                pos_bbox = frcnn_bbox[i][pos_indices]
+                pos_gt_boxes = reference[pos_indices]
+                
+                reg_loss = F.smooth_l1_loss(pos_bbox, pos_gt_boxes)
+                total_regression_loss += reg_loss
+
+        avg_classification_loss = total_classification_loss / batch_size
+        avg_regression_loss = total_regression_loss / batch_size
+
+        total_loss = avg_classification_loss + avg_regression_loss
+
+        return total_loss, avg_classification_loss, avg_regression_loss
 
 class RPNLoss(nn.Module): 
     def __init__(self, positive_iou_threshold=0.7, negative_iou_threshold=0.3):
