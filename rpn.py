@@ -83,7 +83,7 @@ class Regional_Proposal_Network(nn.Module):
 
         self.rpn_head = RPN_head(input_dimensions=input_dimension, mid_channels=mid_dimension, num_anchors=self.num_anchors, conv_depth=conv_depth)
 
-        self.proposal_Filter = ProposalFilter(iou_threshold=0.5, min_size=10, score_threshold=0.5, max_proposals=1000)
+        self.proposal_Filter = ProposalFilter(iou_threshold=iou_threshold, min_size=min_size, score_threshold=score_threshold, max_proposals=max_proposals)
 
     def forward(self, image_list: torch.Tensor, feature_map: torch.Tensor) -> torch.Tensor:
         """
@@ -124,10 +124,12 @@ def main():
   f_map_height = 16 
   f_map_width = 16
 
-  image_list = torch.rand((batch_idx, image_channels, height, width), dtype = torch.float32, device = "cuda" if torch.cuda.is_available() else "cpu")
-  feature_map = torch.rand((batch_idx, feature_map_dim, f_map_height, f_map_width), dtype = torch.float32, device = "cuda" if torch.cuda.is_available() else "cpu")
+  device = "cuda" if torch.cuda.is_available() else "cpu"
 
-  rpn = Regional_Proposal_Network(512, 512, 3, 0.5, 0.5, 16, 1000, (128, 256, 512), (0.5, 1, 2)) 
+  image_list = torch.rand((batch_idx, image_channels, height, width), dtype = torch.float32, device = device)
+  feature_map = torch.rand((batch_idx, feature_map_dim, f_map_height, f_map_width), dtype = torch.float32, device = device)
+
+  rpn = Regional_Proposal_Network(512, 512, 3, 0.5, 0.5, 16, 1000, (128, 256, 512), (0.5, 1, 2)).to(device)
 
   output = rpn(image_list, feature_map)
 
