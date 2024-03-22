@@ -72,6 +72,7 @@ class Regional_Proposal_Network(nn.Module):
                  max_proposals: int,
                  size: Tuple[int],
                  aspect_ratio: Tuple[int],
+                 train_mode : bool = True
                  ):
 
         super(Regional_Proposal_Network, self).__init__()
@@ -84,6 +85,8 @@ class Regional_Proposal_Network(nn.Module):
         self.rpn_head = RPN_head(input_dimensions=input_dimension, mid_channels=mid_dimension, num_anchors=self.num_anchors, conv_depth=conv_depth)
 
         self.proposal_Filter = ProposalFilter(iou_threshold=iou_threshold, min_size=min_size, score_threshold=score_threshold, max_proposals=max_proposals)
+
+        self.train_mode = train_mode
 
     def forward(self, image_list: torch.Tensor, feature_map: torch.Tensor) -> torch.Tensor:
         """
@@ -108,7 +111,11 @@ class Regional_Proposal_Network(nn.Module):
         batch_index = torch.cat([torch.full((len(batch), 1), i) for i, batch in enumerate(filtered_anchors)], dim = 0).to(feature_map.device)
         
         roi = torch.cat([roi, batch_index], dim = 1)
-        return roi
+
+        if self.train_mode: 
+          return roi, predict_cls, predict_bbox_deltas, anchors
+        else:
+          return roi
 
 def main():
     """
