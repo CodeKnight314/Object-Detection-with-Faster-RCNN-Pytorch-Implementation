@@ -118,24 +118,28 @@ class RPNLoss(nn.Module):
                                 the highest IOU value with the respective proposal.
         """
         N, P, _ = proposals.shape
-
-        iou_matrix = calculate_iou_batch(proposals=proposals, references=references)
+        
+        # Initialize labels and IOU storage
+        labels = torch.full((N, P), -1, dtype=torch.int64, device=proposals.device)
         maxed_iou_matrix = []
         maxed_iou_index = []
-
-        for item in iou_matrix: 
-            max_iou, max_idx = item.max(dim=1)
+        
+        for i, ref in enumerate(references):
+            if ref.numel() == 0:
+                maxed_iou_matrix.append(torch.zeros(P, device=proposals.device))
+                maxed_iou_index.append(torch.zeros(P, dtype=torch.int64, device=proposals.device))
+                continue
+            
+            iou = calculate_iou(proposals[i], ref)
+            max_iou, max_idx = iou.max(dim=1)
             maxed_iou_matrix.append(max_iou)
             maxed_iou_index.append(max_idx)
         
-        maxed_matrix = torch.stack(maxed_iou_matrix)
-
-        labels = torch.full((N, P), -1, dtype=torch.float32, device=proposals.device)  # Ensure labels are float
-        labels[maxed_matrix > self.positive_iou_anchor] = 1
-        labels[maxed_matrix < self.negative_iou_anchor] = 0
-
+            labels[i][max_iou > self.positive_iou_anchor] = 1
+            labels[i][max_iou < self.negative_iou_anchor] = 0
+        
         return labels, maxed_iou_matrix, maxed_iou_index
-    
+
     def match_gt_to_box(self, positive_reference_index : List[torch.Tensor], references : List[torch.Tensor]):
         """
         Matches ground truth boundary box to each proposal at index batch_idx
@@ -149,7 +153,14 @@ class RPNLoss(nn.Module):
         Returns: 
             List[torch.Tensor]: a list of tensors, each with shape (number of positive proposals, 4)
         """
-        return [box[positive_reference_index[i]] for i, box in enumerate(references)] 
+        matched_boxes = []
+        for i, box in enumerate(references):
+            if len(box) == 0 or len(positive_reference_index[i]) == 0:
+                continue
+            valid_indices = positive_reference_index[i][positive_reference_index[i] < box.size(0)]
+            matched_boxes.append(box[valid_indices])
+    
+        return matched_boxes
 
     def forward(self, cls_scores: torch.Tensor, bbox_deltas: torch.Tensor, proposals: torch.Tensor, references: List[torch.Tensor]): 
         """
@@ -164,29 +175,35 @@ class RPNLoss(nn.Module):
         Returns: 
             torch.Tensor: The total loss combining objectness and bbox regression losses.
         """  
-        labels, maxed_iou_matrix, maxed_iou_index = self.generate_labels(proposals=proposals, references=references)
+        labels, maxed_iou_matrix, maxed_iou_index = self.generate_labels(proposals, references)
         
-        mask = labels != -1 
-        BCELoss = F.binary_cross_entropy(cls_scores[:, :, 1], labels, reduction='none') * mask 
+        mask = labels != -1
+        
+        BCELoss = F.binary_cross_entropy_with_logits(cls_scores[:, :, 1], labels.float(), reduction='none') * mask
         objectness_loss = BCELoss.sum() / mask.sum()
-
+        
+        bbox_loss = 0.0
+        
         positive_mask = labels == 1
-        if positive_mask.any():
+        if positive_mask.sum() > 0:
             positive_proposals = proposals[positive_mask]
-            positive_indices = torch.cat([idx[mask] for idx, mask in zip(maxed_iou_index, positive_mask)])
-            matched_gt_boxes = torch.cat([refs[idx] for refs, idx in zip(references, positive_indices)])
             
-            regression_targets = bbox_decode(positive_proposals, matched_gt_boxes)
-
-            positive_deltas = bbox_deltas[positive_mask]
-
-            bbox_loss = F.smooth_l1_loss(positive_deltas, regression_targets, reduction='mean')
-        else:
-            bbox_loss = 0.0
-
+            positive_indices = [idx[mask] for idx, mask in zip(maxed_iou_index, positive_mask)]
+            
+            matched_gt_boxes = self.match_gt_to_box(positive_indices, references)
+        
+            if len(matched_gt_boxes) > 0 and any([len(boxes) > 0 for boxes in matched_gt_boxes]):
+                matched_gt_boxes = torch.cat(matched_gt_boxes, dim=0)
+                
+                regression_targets = bbox_decode(positive_proposals, matched_gt_boxes)
+                
+                positive_deltas = bbox_deltas[positive_mask]
+                
+                bbox_loss = F.smooth_l1_loss(positive_deltas, regression_targets, reduction='mean')
+        
         total_loss = objectness_loss + bbox_loss
         
-        return total_loss
+        return total_loss, objectness_loss, bbox_loss
     
 def get_optimizer(model, lr : float, betas : Tuple[float], weight_decay : float): 
     """
