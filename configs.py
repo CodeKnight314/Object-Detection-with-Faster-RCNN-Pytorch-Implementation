@@ -6,3 +6,4 @@ lr = 1e-4
 
 epochs = 25 
 
+model_save_path = ""
