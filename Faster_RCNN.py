@@ -5,7 +5,7 @@ from torchvision.models import resnet18, ResNet18_Weights
 from roi import *
 
 class Faster_RCNN(nn.Module): 
-    def __init__(self, num_classes): 
+    def __init__(self, num_classes : int, train_mode : bool = True): 
 
         super(Faster_RCNN, self).__init__()
 
@@ -21,6 +21,8 @@ class Faster_RCNN(nn.Module):
         self.detector_cls = nn.Sequential(*[nn.Linear(self.rpn.proposal_Filter.max_proposals * 512 * self.roi.output_size[0] * self.roi.output_size[1], num_classes), nn.Dropout(0.3), nn.Sigmoid()])
 
         self.detector_bbox = nn.Sequential(*[nn.Linear(self.rpn.proposal_Filter.max_proposals * 512 * self.roi.output_size[0] * self.roi.output_size[1], num_classes * 4), nn.Dropout(0.3)])
+
+        self.train_mode = train_mode
 
     def forward(self, x : torch.Tensor):
         """
@@ -39,7 +41,12 @@ class Faster_RCNN(nn.Module):
 
         feature_maps = self.backbone(x)
 
-        roi = self.rpn(x, feature_maps)
+
+        if self.train_mode:
+            roi, predict_cls, predict_bbox_deltas, anchors = self.rpn(x, feature_maps)
+
+        else:
+            roi = self.rpn(x, feature_maps)
 
         pooled_features = self.roi(feature_maps, roi)
 
@@ -49,7 +56,10 @@ class Faster_RCNN(nn.Module):
 
         bbox = self.detector_bbox(pooled_features)
 
-        return cls_label, bbox
+        if self.train_mode: 
+            return cls_label, bbox, predict_cls, predict_bbox_deltas, anchors
+        else:
+            return cls_label, bbox
     
 def main(): 
     batch_idx = 16 
