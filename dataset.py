@@ -75,11 +75,9 @@ class ObjectDetectionDataset(Dataset, ABC):
 
         for ann_item in ann: 
             for cat_id, bbox in ann_item.items():
-                labels.append(cat_id)            
+                labels.append(torch.tensor(cat_id))
                 box.append(bbox)
 
-        box = torch.stack(box)
-        labels = torch.tensor(labels)
         return img, {'boxes': box, 'labels': labels}
     
     def __load_dataset__(self):
@@ -204,7 +202,6 @@ class YOLOv5tov8(ObjectDetectionDataset):
                 parsed_annotations[img_id].append({class_id: bbox})
         
         return parsed_annotations
-
 
 class PascalVOCXML(ObjectDetectionDataset):
     """
