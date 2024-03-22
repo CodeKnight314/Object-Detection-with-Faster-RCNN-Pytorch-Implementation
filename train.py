@@ -26,6 +26,24 @@ def train(model : Faster_RCNN, dataset : DataLoader, logger : LOGWRITER, schedul
             bboxes = gts["boxes"]
             labels = gts["labels"]
 
-            frcnn_labels, frcnn_bboxes = model(images)
+            frcnn_labels, frcnn_bboxes, rpn_predict_cls, rpn_predict_bbox_deltas, rpn_anchors= model(images)
+
+            ith_rpn_loss = rpn_loss_function(rpn_predict_cls, rpn_predict_bbox_deltas, rpn_anchors)
+
+            ith_frcnn_loss = frcnn_loss_function(frcnn_labels, frcnn_bboxes, labels, bboxes)
+
+            rpn_loss += ith_rpn_loss
+            frcnn_loss += ith_frcnn_loss
+
+        rpn_loss /= configs.batch_number
+        frcnn_loss /= configs.batch_number
+
+        logger.write(epoch, RPN_Loss = rpn_loss, FRCNN_Loss = frcnn_loss)
+
+        if best_loss > (rpn_loss + frcnn_loss):
+            os.makedirs(configs.model_save_path) 
+            torch.save(model.state_dict(), os.path.join(configs.model_save_path, "FRCNN_model.pth"))
+
+
 
 
