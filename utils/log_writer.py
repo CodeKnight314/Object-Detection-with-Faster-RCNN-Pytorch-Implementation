@@ -2,7 +2,7 @@ from glob import glob
 import os
 from datetime import datetime 
 
-class Log_writer(): 
+class LOGWRITER(): 
 
     def __init__(self, output_directory : str, total_epochs : int): 
         self.output_dir = output_directory 
