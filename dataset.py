@@ -75,10 +75,10 @@ class ObjectDetectionDataset(Dataset, ABC):
 
         for ann_item in ann: 
             for cat_id, bbox in ann_item.items():
-                labels.append(torch.tensor(cat_id))
-                box.append(bbox)
+                labels.append(torch.tensor(cat_id).to(self.device))
+                box.append(bbox.to(self.device))
 
-        return img, {'boxes': box, 'labels': labels}
+        return img.to(self.device), {'boxes': box, 'labels': labels}
     
     def __load_dataset__(self):
         """Abstract method to load the dataset. Must be implemented by subclasses."""
