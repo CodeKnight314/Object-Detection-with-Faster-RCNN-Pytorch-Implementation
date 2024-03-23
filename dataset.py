@@ -256,6 +256,18 @@ class PascalVOCXML(ObjectDetectionDataset):
 
         return objects
 
+def load_COCO_dataset(root_dir, image_height, image_width, annotation_dir, transforms=None, mode="train"): 
+    return COCODataset(root_dir, image_height, image_width, annotation_dir, transforms=None, mode="train")
+    
+def load_YOLOv4_dataset(root_dir, image_height, image_width, annotation_dir, transforms=None, mode="train"):
+    return YOLOv4(root_dir, image_height, image_width, annotation_dir, transforms=None, mode="train")
+
+def load_YOLOv5tov8_dataset(root_dir, image_height, image_width, annotation_dir, transforms=None, mode="train"):
+    return YOLOv5tov8(root_dir, image_height, image_width, annotation_dir, transforms=None, mode="train")
+
+def load_Pascal_dataset(root_dir, image_height, image_width, annotation_dir, transforms=None, mode="train"): 
+    return PascalVOCXML(root_dir, image_height, image_width, annotation_dir, transforms=None, mode="train")
+
 def load_dataloaders(dataset: ObjectDetectionDataset, batch_size: int, shuffle: bool, drop_last: bool) -> DataLoader:
     """
     Utility function to create a DataLoader from an ObjectDetectionDataset.
