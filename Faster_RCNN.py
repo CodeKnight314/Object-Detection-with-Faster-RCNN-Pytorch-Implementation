@@ -3,6 +3,7 @@ import torch
 import torch.nn as nn 
 from torchvision.models import resnet18, ResNet18_Weights
 from roi import *
+import configs 
 
 class Faster_RCNN(nn.Module): 
     def __init__(self, num_classes : int, train_mode : bool = True): 
@@ -60,7 +61,13 @@ class Faster_RCNN(nn.Module):
             return cls_label, bbox, predict_cls, predict_bbox_deltas, anchors
         else:
             return cls_label, bbox
-    
+
+def get_model(training : bool = True): 
+    """
+    Helper function to get model
+    """
+    return Faster_RCNN(configs.num_of_classes, training).to("cuda" if torch.cuda.is_available() else "cpu")
+
 def main(): 
     batch_idx = 16 
     image_channel = 3 
