@@ -1,7 +1,6 @@
 import torch 
 import configs
 import torch.nn as nn 
-from tqdm import tqdm 
 from loss import *
 from torch_snippets import *
 from dataset import *
@@ -9,6 +8,7 @@ from utils.log_writer import LOGWRITER
 from Faster_RCNN import Faster_RCNN
 from torch.utils.data import DataLoader
 from Faster_RCNN import *
+from tqdm import tqdm
 
 def train(model : Faster_RCNN, dataset : DataLoader, logger : LOGWRITER, optimizer : torch.optim, scheduler : opt.lr_scheduler.StepLR,
           rpn_loss_function : RPNLoss, frcnn_loss_function : FasterRCNNLoss, epochs : int): 
@@ -23,7 +23,7 @@ def train(model : Faster_RCNN, dataset : DataLoader, logger : LOGWRITER, optimiz
         rpn_loss = 0.0
         frcnn_loss = 0.0 
 
-        for i, data in enumerate(tqdm(dataset, desc = f"[{epoch}/{epochs}] Training:")):
+        for data in tqdm(dataset, desc = f"[{epoch+1}/{epochs}] Training"):
             images, gts = data 
             bboxes = gts["boxes"]
             labels = gts["labels"]
@@ -53,29 +53,33 @@ def train(model : Faster_RCNN, dataset : DataLoader, logger : LOGWRITER, optimiz
             if not os.path.exists(configs.model_save_path):
                 os.makedirs(configs.model_save_path) 
             torch.save(model.state_dict(), os.path.join(configs.model_save_path, "FRCNN_model.pth"))
+            best_loss = rpn_loss + frcnn_loss
 
         scheduler.step()
 
 def main(): 
-
-    train_dl = load_dataloaders(
-        load_COCO_dataset(configs.root_dir,
+    train_dataset = load_COCO_dataset(configs.root_dir,
                           configs.image_height, 
                           configs.image_width, 
                           configs.annotation_dir, 
                           transforms=None, 
-                          mode="train"), 
-                          
-                          configs.batch_number, 
-                          shuffle = True)
+                          mode="train"),
     
-    model = get_model(training=True)
+    train_dl = load_dataloaders(train_dataset[0], 
+                                configs.batch_number,
+                                shuffle = True, 
+                                drop_last = True)
+
+    print("[INFO] Dataloader loaded successfully")
+    print(f"[INFO] total training samples {len(train_dataset[0])}")
+    
+    model = get_model(cls_count = len(train_dataset[0].id_to_category), training=True)
 
     logger = LOGWRITER(configs.output_dir, configs.epochs)
 
     opt = get_optimizer(model, lr=configs.lr, betas=configs.betas, weight_decay=configs.weight_decay)
 
-    scheduler = get_scheduler()
+    scheduler = get_scheduler(optimizer = opt, step_size = configs.epochs//5, gamma = 0.5)
 
     rpn_loss, frcnn_loss = get_loss_functions((0.7, 0.3))
 
@@ -88,6 +92,5 @@ def main():
           frcnn_loss_function=frcnn_loss, 
           epochs=configs.epochs)
 
-
-
-
+if __name__ == "__main__": 
+    main()
