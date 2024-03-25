@@ -257,7 +257,7 @@ class PascalVOCXML(ObjectDetectionDataset):
         return objects
 
 def load_COCO_dataset(root_dir, image_height, image_width, annotation_dir, transforms=None, mode="train"): 
-    return COCODataset(root_dir, image_height, image_width, annotation_dir, transforms=None, mode="train")
+    return COCODataset(root_dir, image_height, image_width, annotation_dir, transforms=transforms, mode=mode)
     
 def load_YOLOv4_dataset(root_dir, image_height, image_width, annotation_dir, transforms=None, mode="train"):
     return YOLOv4(root_dir, image_height, image_width, annotation_dir, transforms=None, mode="train")
@@ -283,3 +283,19 @@ def load_dataloaders(dataset: ObjectDetectionDataset, batch_size: int, shuffle: 
     """
     dl = DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, drop_last=drop_last)
     return dl
+
+def main(): 
+    root_dir = "/workspace/train"
+    annotation_dir = "/workspace/train/_annotations.coco.json"
+    image_height = 600  # Example height
+    image_width = 800  # Example width
+    
+    coco_dataset = COCODataset(root_dir, image_height, image_width, annotation_dir)
+    
+    # Debugging: Check the first few image paths and annotations
+    for i in range(min(5, len(coco_dataset))):
+        img, ann = coco_dataset[i]
+        print(f'Image {i}: Path = {coco_dataset.image_paths[i]}, Annotations = {ann}')
+
+if __name__ == "__main__": 
+    main()
