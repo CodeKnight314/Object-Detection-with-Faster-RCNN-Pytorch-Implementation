@@ -67,7 +67,13 @@ class ObjectDetectionDataset(Dataset, ABC):
                   - 'labels': a tensor of the corresponding labels of shape (N,),
                   where N is the number of objects in the image.
         """
-        img = self.transforms(Image.open(self.image_paths[index]).convert("RGB"))
+        image = Image.open(self.image_paths[index]).convert("RGB")
+        img_h, img_w = image.size
+
+        x_scale_factor = self.img_width / img_w
+        y_scale_factor = self.img_height / img_h
+
+        img = self.transforms(image)
         ann = self.annotations[index]
 
         labels = []
@@ -76,7 +82,13 @@ class ObjectDetectionDataset(Dataset, ABC):
         for ann_item in ann: 
             for cat_id, bbox in ann_item.items():
                 labels.append(torch.tensor(cat_id).to(self.device))
-                box.append(bbox.to(self.device))
+                scaled_bbox = [
+                    bbox[0] * x_scale_factor,  # xmin
+                    bbox[1] * y_scale_factor,  # ymin
+                    bbox[2] * x_scale_factor,  # xmax
+                    bbox[3] * y_scale_factor   # ymax
+                ]
+                box.append(torch.tensor(scaled_bbox).to(self.device))
 
         return img.to(self.device), {'boxes': box, 'labels': labels}
     
