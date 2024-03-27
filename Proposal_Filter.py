@@ -14,20 +14,20 @@ class ProposalFilter(nn.Module):
         batch_size = proposals.shape[0]
         filtered_proposals = []
         filtered_scores = []
-
+    
         for i in range(batch_size):
             prop = proposals[i]
             scores = cls_scores[i][:, 1]  # Assuming second column is objectness score
-
+    
             # Score thresholding
             high_score_idxs = torch.where(scores > self.score_threshold)[0]
             prop = prop[high_score_idxs]
             scores = scores[high_score_idxs]
-
+    
             # Apply NMS and select top-scoring proposals
             keep_idxs = self.nms(prop, scores)
             keep_idxs = keep_idxs[:self.max_proposals]
-            
+    
             # Check if we have less than max_proposals
             if len(keep_idxs) < self.max_proposals:
                 pad_size = self.max_proposals - len(keep_idxs)
@@ -36,11 +36,20 @@ class ProposalFilter(nn.Module):
                 else:
                     pad_idxs = torch.full((pad_size,), keep_idxs[-1], dtype=torch.long, device=proposals.device)
                 keep_idxs = torch.cat((keep_idxs, pad_idxs))
-
-            filtered_proposals.append(prop[keep_idxs])
-            filtered_scores.append(scores[keep_idxs])
-
+    
+            # Ensure that keep_idxs has valid indices for prop
+            keep_idxs = keep_idxs[keep_idxs < prop.shape[0]]
+    
+            # Check if prop is empty or keep_idxs is empty after NMS
+            if prop.shape[0] == 0 or len(keep_idxs) == 0:
+                filtered_proposals.append(torch.empty(0, 4, dtype=prop.dtype, device=prop.device))
+                filtered_scores.append(torch.empty(0, dtype=scores.dtype, device=scores.device))
+            else:
+                filtered_proposals.append(prop[keep_idxs])
+                filtered_scores.append(scores[keep_idxs])
+    
         return torch.stack(filtered_proposals), torch.stack(filtered_scores)
+
 
     def nms(self, proposals: torch.Tensor, scores: torch.Tensor) -> torch.Tensor:
         _, idxs = scores.sort(descending=True)
