@@ -18,10 +18,12 @@ class Faster_RCNN(nn.Module):
                                              aspect_ratio=(0.5, 1.0, 2.0))
         
         self.roi = ROIAlign(output_size=(7, 7), spatial_scale=1.0)
-        
-        self.detector_cls = nn.Sequential(*[nn.Linear(self.rpn.proposal_Filter.max_proposals * 512 * self.roi.output_size[0] * self.roi.output_size[1], num_classes), nn.Dropout(0.3), nn.Sigmoid()])
 
-        self.detector_bbox = nn.Sequential(*[nn.Linear(self.rpn.proposal_Filter.max_proposals * 512 * self.roi.output_size[0] * self.roi.output_size[1], num_classes * 4), nn.Dropout(0.3)])
+        self.input_feature_dim = self.rpn.proposal_Filter.max_proposals * 512 * self.roi.output_size[0] * self.roi.output_size[1]
+        
+        self.detector_cls = nn.Sequential(*[nn.Linear(self.input_feature_dim, num_classes), nn.Dropout(0.3), nn.Sigmoid()])
+
+        self.detector_bbox = nn.Sequential(*[nn.Linear(self.input_feature_dim, num_classes * 4), nn.Dropout(0.3)])
 
         self.train_mode = train_mode
 
@@ -62,11 +64,11 @@ class Faster_RCNN(nn.Module):
         else:
             return cls_label, bbox
 
-def get_model(training : bool = True): 
+def get_model(cls_count : int, training : bool = True): 
     """
     Helper function to get model
     """
-    return Faster_RCNN(configs.num_of_classes, training).to("cuda" if torch.cuda.is_available() else "cpu")
+    return Faster_RCNN(cls_count, training).to("cuda" if torch.cuda.is_available() else "cpu")
 
 def main(): 
     batch_idx = 16 
