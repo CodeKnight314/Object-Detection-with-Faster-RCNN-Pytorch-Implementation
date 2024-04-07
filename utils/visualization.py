@@ -4,6 +4,8 @@ from typing import Tuple, Union
 from glob import glob 
 from tqdm import tqdm 
 import os
+import matplotlib.pyplot as plt
+import seaborn as sns
 
 def draw_boundary_box(image_path : str, coordinates : Tuple[Tuple[int]], color : Tuple[int], thickness : int,
                       output_directory : Union[str, None], show : bool = False): 
@@ -173,3 +175,32 @@ def batch_noise(root_dir : str, output_dir : Union[str, None], show : bool = Fal
                               show=False)
     else: 
         raise ValueError(f"[Error] Invalid mode. {mode} is not available as a noise mode.")
+    
+def plot_confusion_matrix(true_labels : np.array, predictions : np.array, num_classes : int, save_pth : Union[str, None]):
+    """
+    Computes and plots a confusion matrix.
+    
+    Args:
+        true_labels (np.array): 1D NumPy array of true class labels
+        predictions (np.array): 1D NumPy array of predicted class labels
+        num_classes (np.array): Total number of classes
+        save_pth (Union[str, None]): save path for confusion matrix 
+    """
+    
+    # Compute the confusion matrix
+    cm = np.zeros((num_classes, num_classes), dtype=int)
+    for true, pred in zip(true_labels, predictions):
+        cm[true, pred] += 1
+    
+    # Plot the confusion matrix
+    plt.figure(figsize=(10, 7))
+    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', 
+                xticklabels=[f'Class {i}' for i in range(num_classes)], 
+                yticklabels=[f'Class {i}' for i in range(num_classes)])
+    plt.xlabel('Predicted')
+    plt.ylabel('True')
+    plt.title('Confusion Matrix')
+    plt.show()
+
+    if save_pth: 
+        plt.savefig(save_pth)
