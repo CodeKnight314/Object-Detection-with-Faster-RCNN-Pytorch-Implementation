@@ -7,6 +7,8 @@ from PIL import Image
 from glob import glob
 import json
 import xml.etree.ElementTree as ET
+from torch.nn.utils.rnn import pad_sequence
+import configs
 
 class ObjectDetectionDataset(Dataset, ABC):
     """
@@ -81,14 +83,17 @@ class ObjectDetectionDataset(Dataset, ABC):
 
         for ann_item in ann: 
             for cat_id, bbox in ann_item.items():
-                labels.append(torch.tensor(cat_id).to(self.device))
+                labels.append(cat_id)
                 scaled_bbox = [
                     bbox[0] * x_scale_factor,  # xmin
                     bbox[1] * y_scale_factor,  # ymin
                     bbox[2] * x_scale_factor,  # xmax
                     bbox[3] * y_scale_factor   # ymax
                 ]
-                box.append(torch.tensor(scaled_bbox).to(self.device))
+                box.append(scaled_bbox)
+
+        labels = torch.tensor(labels, dtype = torch.int64, device = self.device)
+        box = torch.tensor(box, dtype = torch.float32, device = self.device)
 
         return img.to(self.device), {'boxes': box, 'labels': labels}
     
@@ -202,14 +207,20 @@ class YOLOv5tov8(ObjectDetectionDataset):
             for line in annotation_lines:
                 if line.strip() == "":  # Skip empty lines
                     continue
+                    
                 parts = line.split(" ")
                 x, y, w, h = [float(item) for item in parts[1:]]
                 x_center_abs = x * width
                 y_center_abs = y * height
                 width_abs = w * width
                 height_abs = h * height
+                
                 # Convert to [x_min, y_min, x_max, y_max] format
-                bbox = torch.tensor([x_center_abs - width_abs/2, y_center_abs - height_abs/2, x_center_abs + width_abs/2, y_center_abs + height_abs/2], dtype=torch.float32)
+                bbox = torch.tensor([x_center_abs - width_abs/2, 
+                                     y_center_abs - height_abs/2, 
+                                     x_center_abs + width_abs/2, 
+                                     y_center_abs + height_abs/2], dtype=torch.float32)
+                
                 class_id = int(parts[0])
                 parsed_annotations[img_id].append({class_id: bbox})
         
@@ -293,8 +304,31 @@ def load_dataloaders(dataset: ObjectDetectionDataset, batch_size: int, shuffle: 
     Returns:
         DataLoader: A DataLoader for the given dataset.
     """
-    dl = DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, drop_last=drop_last)
+    dl = DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, drop_last=drop_last, collate_fn = collate_fn)
     return dl
+
+def collate_fn(batch):
+    images, targets = list(zip(*batch))
+    
+    # Pad the bounding boxes and labels
+    boxes = [item['boxes'] if item['boxes'].nelement() != 0 else torch.tensor([[-1, -1, -1, -1]], dtype=torch.float32) 
+             for item in targets]
+    labels = [item['labels'] if item['labels'].nelement() != 0 else torch.tensor([-1], dtype=torch.long) 
+              for item in targets]
+
+    for box in boxes: 
+        print(box.shape)
+
+    boxes = pad_sequence(boxes, batch_first=True, padding_value=-1)
+    labels = pad_sequence(labels, batch_first=True, padding_value=-1)
+
+    # Create a new targets dictionary
+    targets = [{'boxes': b, 'labels': l} for b, l in zip(boxes, labels)]
+
+    # Stack images into a single tensor
+    images = torch.stack(images, dim=0)
+
+    return images, targets
 
 def main(): 
     root_dir = "/workspace/train"
@@ -307,7 +341,11 @@ def main():
     # Debugging: Check the first few image paths and annotations
     for i in range(min(5, len(coco_dataset))):
         img, ann = coco_dataset[i]
-        print(f'Image {i}: Path = {coco_dataset.image_paths[i]}, Annotations = {ann}')
+        print(f'Image {i}: Path = {coco_dataset.image_paths[i]}, Annotations = {ann}\n')
+
+    dl = DataLoader(coco_dataset, batch_size = configs.batch_number, shuffle = True, drop_last = True, collate_fn = collate_fn)
+
+    batch = next(iter(dl))
 
 if __name__ == "__main__": 
     main()
