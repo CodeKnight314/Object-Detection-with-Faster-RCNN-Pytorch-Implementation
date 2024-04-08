@@ -10,16 +10,18 @@ class Faster_RCNN(nn.Module):
 
         super(Faster_RCNN, self).__init__()
 
+        self.num_classes = num_classes
+
         self.backbone = nn.Sequential(*list(resnet18(weights=ResNet18_Weights.IMAGENET1K_V1).children())[:-2])
 
         self.rpn = Regional_Proposal_Network(input_dimension=512, mid_dimension=256, conv_depth=4,
-                                             score_threshold=0.7, iou_threshold=0.3, min_size=16,
-                                             max_proposals=100, size=(128, 256, 512),
+                                             score_threshold=0.5, iou_threshold=0.3, min_size=16,
+                                             max_proposals=256, size=(128, 256, 512),
                                              aspect_ratio=(0.5, 1.0, 2.0))
         
         self.roi = ROIAlign(output_size=(7, 7), spatial_scale=1.0)
 
-        self.input_feature_dim = self.rpn.proposal_Filter.max_proposals * 512 * self.roi.output_size[0] * self.roi.output_size[1]
+        self.input_feature_dim = 512 * self.roi.output_size[0] * self.roi.output_size[1]
         
         self.detector_cls = nn.Sequential(*[nn.Linear(self.input_feature_dim, num_classes), nn.Dropout(0.3), nn.Sigmoid()])
 
@@ -41,9 +43,7 @@ class Faster_RCNN(nn.Module):
                 - The second tensor is the bounding box regressions for each ROI with shape (batch_size, num_proposals, num_classes * 4),
                 where each set of 4 values represents the (x_min, y_min, x_max, y_max) adjustments for the corresponding class.
         """
-
         feature_maps = self.backbone(x)
-
 
         if self.train_mode:
             roi, predict_cls, predict_bbox_deltas, anchors = self.rpn(x, feature_maps)
@@ -51,16 +51,16 @@ class Faster_RCNN(nn.Module):
         else:
             roi = self.rpn(x, feature_maps)
 
-        pooled_features = self.roi(feature_maps, roi)
+        pooled_features = self.roi(feature_maps, roi) # (N*P, 512, 7, 7)
 
-        pooled_features = pooled_features.view(x.size(0), -1)
+        pooled_features = pooled_features.view(pooled_features.shape[0], -1)
 
         cls_label = self.detector_cls(pooled_features)
 
         bbox = self.detector_bbox(pooled_features)
 
         if self.train_mode: 
-            return cls_label, bbox, predict_cls, predict_bbox_deltas, anchors
+            return cls_label.reshape(x.size(0), -1, self.num_classes), bbox.reshape(x.size(0), -1, self.num_classes, 4), predict_cls, predict_bbox_deltas, anchors
         else:
             return cls_label, bbox
 
