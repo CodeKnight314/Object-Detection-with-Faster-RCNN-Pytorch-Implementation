@@ -14,38 +14,41 @@ def train(model : Faster_RCNN, dataset : DataLoader, logger : LOGWRITER, optimiz
           rpn_loss_function : RPNLoss, frcnn_loss_function : FasterRCNNLoss, epochs : int): 
     
     if configs.model_path:
-        model.load_state_dict(torch.load(configs.model_path, map_location="cuda" if torch.cuda.is_available() else "cpu"))
+        model.load_state_dict(torch.load(configs.model_path, 
+                                         map_location="cuda" if torch.cuda.is_available() else "cpu"))
 
     best_loss = float('inf')
 
     for epoch in range(epochs):
 
-        rpn_loss = 0.0
-        frcnn_loss = 0.0 
+        rpn_loss = []
+        frcnn_loss = []
 
         for data in tqdm(dataset, desc = f"[{epoch+1}/{epochs}] Training"):
             images, gts = data 
-            bboxes = gts["boxes"]
-            labels = gts["labels"]
+
+            # Note to self -> make bboxes and labels creation more efficient -> reduce loop down to one iteration max?
+            bboxes = [item["boxes"] for item in gts]
+            labels = [item["labels"] for item in gts]
 
             optimizer.zero_grad()
 
             frcnn_labels, frcnn_bboxes, rpn_predict_cls, rpn_predict_bbox_deltas, rpn_anchors= model(images)
 
-            ith_rpn_loss = rpn_loss_function(rpn_predict_cls, rpn_predict_bbox_deltas, rpn_anchors)
+            rpn_total_loss, rpn_objectness_loss, rpn_bbox_loss = rpn_loss_function(rpn_predict_cls, rpn_predict_bbox_deltas, rpn_anchors, bboxes)
 
-            ith_frcnn_loss = frcnn_loss_function(frcnn_labels, frcnn_bboxes, labels, bboxes)
+            frcnn_total_loss, frcnn_regression_loss, frcnn_classification_loss = frcnn_loss_function(frcnn_labels, frcnn_bboxes, labels, bboxes)
 
-            rpn_loss += ith_rpn_loss
-            frcnn_loss += ith_frcnn_loss
+            rpn_loss.append(rpn_total_loss)
+            frcnn_loss.append(frcnn_total_loss)
 
-            total_loss = ith_frcnn_loss + ith_rpn_loss
+            total_loss = frcnn_total_loss + rpn_total_loss
 
             total_loss.backward()
             optimizer.step()
 
-        rpn_loss /= configs.batch_number
-        frcnn_loss /= configs.batch_number
+        rpn_loss = torch.stack(rpn_loss).mean()
+        frcnn_loss = torch.stack(frcnn_loss).mean()
 
         logger.write(epoch, RPN_Loss = rpn_loss, FRCNN_Loss = frcnn_loss)
 
