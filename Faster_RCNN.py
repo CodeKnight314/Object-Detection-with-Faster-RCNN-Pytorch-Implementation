@@ -4,6 +4,7 @@ import torch.nn as nn
 from torchvision.models import resnet18, ResNet18_Weights
 from roi import *
 import configs 
+import time
 
 class Faster_RCNN(nn.Module): 
     def __init__(self, num_classes : int, train_mode : bool = True): 
@@ -29,6 +30,8 @@ class Faster_RCNN(nn.Module):
 
         self.train_mode = train_mode
 
+        self.time_records = {}
+
     def forward(self, x : torch.Tensor):
         """
         Forward pass of the Faster R-CNN model.
@@ -43,21 +46,33 @@ class Faster_RCNN(nn.Module):
                 - The second tensor is the bounding box regressions for each ROI with shape (batch_size, num_proposals, num_classes * 4),
                 where each set of 4 values represents the (x_min, y_min, x_max, y_max) adjustments for the corresponding class.
         """
+        self.time_records = {}
         feature_maps = self.backbone(x)
 
+        rpn_start = time.time() 
         if self.train_mode:
             roi, predict_cls, predict_bbox_deltas, anchors = self.rpn(x, feature_maps)
 
         else:
             roi = self.rpn(x, feature_maps)
+        rpn_end = time.time()
 
+        self.time_records["RPN"] = rpn_end - rpn_start
+
+        roi_start = time.time()
         pooled_features = self.roi(feature_maps, roi) # (N*P, 512, 7, 7)
-
         pooled_features = pooled_features.view(pooled_features.shape[0], -1)
+        roi_end = time.time() 
+        self.time_records["ROI"] = roi_end - roi_start
 
+        detectors_start = time.time()
         cls_label = self.detector_cls(pooled_features)
 
         bbox = self.detector_bbox(pooled_features)
+        detectors_end = time.time()
+        self.time_records["Detectors"] = detectors_end - detectors_start
+
+        self.time_records["Total"] = detectors_end - rpn_start
 
         if self.train_mode: 
             return cls_label.reshape(x.size(0), -1, self.num_classes), bbox.reshape(x.size(0), -1, self.num_classes, 4), predict_cls, predict_bbox_deltas, anchors
