@@ -24,6 +24,10 @@ def train(model : Faster_RCNN, dataset : DataLoader, logger : LOGWRITER, optimiz
         rpn_loss = []
         frcnn_loss = []
 
+        model_runtime = []
+        rpn_runtime = []
+        frcnn_runtime = []
+
         for data in tqdm(dataset, desc = f"[{epoch+1}/{epochs}] Training"):
             images, gts = data 
 
@@ -34,13 +38,20 @@ def train(model : Faster_RCNN, dataset : DataLoader, logger : LOGWRITER, optimiz
             optimizer.zero_grad()
 
             frcnn_labels, frcnn_bboxes, rpn_predict_cls, rpn_predict_bbox_deltas, rpn_anchors= model(images)
+            model_runtime.append(torch.tensor(model.time_records["Total"]))
 
+            rpn_start = time.time()
             rpn_total_loss, rpn_objectness_loss, rpn_bbox_loss = rpn_loss_function(rpn_predict_cls, rpn_predict_bbox_deltas, rpn_anchors, bboxes)
+            rpn_total = time.time() - rpn_start 
 
+            frcnn_start = time.time()
             frcnn_total_loss, frcnn_regression_loss, frcnn_classification_loss = frcnn_loss_function(frcnn_labels, frcnn_bboxes, labels, bboxes)
+            frcnn_total = time.time() - frcnn_start
 
             rpn_loss.append(rpn_total_loss)
             frcnn_loss.append(frcnn_total_loss)
+            rpn_runtime.append(torch.tensor(rpn_total))
+            frcnn_runtime.append(torch.tensor(frcnn_total))
 
             total_loss = frcnn_total_loss + rpn_total_loss
 
@@ -49,8 +60,15 @@ def train(model : Faster_RCNN, dataset : DataLoader, logger : LOGWRITER, optimiz
 
         rpn_loss = torch.stack(rpn_loss).mean()
         frcnn_loss = torch.stack(frcnn_loss).mean()
+        rpn_runtime = torch.stack(rpn_runtime).mean() 
+        frcnn_runtime = torch.stack(frcnn_runtime).mean()
+        model_runtime = torch.stack(model_runtime).mean()
 
-        logger.write(epoch, RPN_Loss = rpn_loss, FRCNN_Loss = frcnn_loss)
+        logger.write(epoch, RPN_Loss = rpn_loss, 
+                     FRCNN_Loss = frcnn_loss, 
+                     RPN_Runtime = rpn_runtime, 
+                     FRCNN_Runtime = frcnn_runtime,
+                     Model_Runtime = model_runtime)
 
         if best_loss > (rpn_loss + frcnn_loss):
             if not os.path.exists(configs.model_save_path):
