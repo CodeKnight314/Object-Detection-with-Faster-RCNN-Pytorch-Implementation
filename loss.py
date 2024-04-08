@@ -7,96 +7,50 @@ from typing import List
 import torch.optim as opt 
 import random 
 
-class FasterRCNNLoss(nn.Module): 
-    def __init__(self, positive_iou_threshold : float, negative_iou_threshold : float): 
+class FasterRCNNLoss(nn.Module):
+    def __init__(self, positive_iou_threshold: float, negative_iou_threshold: float):
         super(FasterRCNNLoss, self).__init__()
-        self.positive_iou_anchor = positive_iou_threshold 
+        self.positive_iou_anchor = positive_iou_threshold
         self.negative_iou_anchor = negative_iou_threshold
 
-    def generate_labels(self, proposal: torch.Tensor, reference: torch.Tensor):
-        """
-        Generate labels for proposals based on IoU with ground truth boxes.
-
-        Args:
-            proposals (torch.Tensor): The proposal anchors with shape (number of proposals, 4).
-            references (torch.Tensor): List of ground truth boxes for each image in the batch. (number of references, )
-
-        Returns:
-            torch.Tensor: Labels for each proposal in the batch.
-            List[torch.Tensor]: Maximum IOU value of each proposal against all ground truth box. ()
-            List[torch.Tensor]: Maximum IOU index of each proposal, indicating which gt box has
-                          the highest IOU value with the respective proposal.
-        """
-        N, P, _ = proposal.shape
-
-        labels = torch.zeros(P, dtype = torch.long, device = proposal.device)
-
-        if reference.numel() == 0:
-          return labels
-
-        iou_matrix = calculate_iou(proposal, reference)
-
-        max_value, max_index = iou_matrix.max(dim = 1)
-
-        labels[max_value >= self.positive_iou_anchor] = reference[max_index[max_value >= self.positive_iou_anchor]]
-
-        return labels
-
-    def select_frcnn_bbox_from_cls(self, frcnn_cls : torch.Tensor, frcnn_bbox : torch.Tensor):
-        """
-        """
-
-        N, P, _ = frcnn_cls.shape
-
+    def select_frcnn_bbox_from_cls(self, frcnn_cls: torch.Tensor, frcnn_bbox: torch.Tensor):
         _, prediction = frcnn_cls.max(dim=2)
+        prediction_index = prediction[..., None, None].expand(-1, -1, 1, 4)
+        selected_bbox = torch.gather(frcnn_bbox, dim=2, index=prediction_index).squeeze(2)
+        return prediction, selected_bbox
 
-        batch_idx = torch.arange(N).view(-1, 1).expand(-1, P).reshape(-1)
+    def forward(self, frcnn_cls: torch.Tensor, frcnn_bbox: torch.Tensor, frcnn_labels: List[torch.Tensor], frcnn_gt_bbox: List[torch.Tensor]):
 
-        proposals = torch.arange(P).repeat(batch_idx)
+        frcnn_pred, frcnn_bbox = self.select_frcnn_bbox_from_cls(frcnn_cls, frcnn_bbox)
 
-        frcnn_bbox = frcnn_bbox[batch_idx, proposals, prediction.view(-1)].view(N, P, 4)
+        highest_iou = [matrix.max(dim = 1)[1].unsqueeze(0) for matrix in calculate_iou_batch(frcnn_bbox, frcnn_gt_bbox)]
 
-        return prediction, frcnn_bbox
+        gts_cls = [] 
+        gts_bbox = []
+        for i in range(frcnn_cls.size(0)): 
+            gts_cls.append(frcnn_labels[i][highest_iou[i]].squeeze(0))
+            gts_bbox.append(frcnn_gt_bbox[i][highest_iou[i]].squeeze(0))
 
-    def forward(self, frcnn_cls : torch.Tensor, frcnn_bbox : torch.Tensor, frcnn_labels : torch.Tensor, frcnn_gt_bbox : List[torch.Tensor]):
-        """
-        Compute Losses for classification and bounding box regression
+        gts_cls = torch.stack(gts_cls).to(frcnn_pred.device).long()
+        gts_bbox = torch.stack(gts_bbox).to(frcnn_pred.device)
 
-        Args:
-            frcnn_cls (torch.Tensor): In the shape of (batch_number, number of proposals, number of classes)
-            frcnn_bbox (torch.Tensor): In the shape of (batch_number, number of proposals, number of classes * 4)
-            frcnn_labels (List[torch.Tensor]): A list of torch.tensors with shape (number of references, ), length of batch_number
-            frcnn_gt_box (List[torch.Tensor]): A list of torch.tensors with shape (number of references, 4), length of batch_number
-        """
-        predictions, frcnn_bbox = self.select_frcnn_bbox_from_cls(frcnn_cls=frcnn_cls, frcnn_bbox=frcnn_bbox)
+        valid_indices = (gts_cls != -1).view(-1)
 
-        batch_size = frcnn_cls.size(0)
-        total_classification_loss = 0
-        total_regression_loss = 0
+        if valid_indices.any():
+            frcnn_cls = frcnn_cls.view(-1, frcnn_cls.size(-1))[valid_indices]
+            gts_cls = gts_cls.view(-1)[valid_indices]
+        else:
+            classification_loss = torch.tensor(0.0).to(frcnn_cls.device)  # Example fallback
 
-        for i in range(batch_size):
-            proposal = frcnn_bbox[i]
-            reference = frcnn_gt_bbox[i]
-            labels = self.generate_labels(proposal, reference)
+        
+        classification_loss = F.cross_entropy(frcnn_cls, gts_cls)        
 
-            cls_loss = F.cross_entropy(frcnn_cls[i], labels)
-            total_classification_loss += cls_loss
+        regression_loss = F.smooth_l1_loss(frcnn_bbox, gts_bbox)
+        
+        total_loss = regression_loss + classification_loss 
 
-            pos_indices = labels > 0  
-            if pos_indices.any():
-                pos_bbox = frcnn_bbox[i][pos_indices]
-                pos_gt_boxes = reference[pos_indices]
-                
-                reg_loss = F.smooth_l1_loss(pos_bbox, pos_gt_boxes)
-                total_regression_loss += reg_loss
-
-        avg_classification_loss = total_classification_loss / batch_size
-        avg_regression_loss = total_regression_loss / batch_size
-
-        total_loss = avg_classification_loss + avg_regression_loss
-
-        return total_loss, avg_classification_loss, avg_regression_loss
-
+        return total_loss, regression_loss, classification_loss
+            
 class RPNLoss(nn.Module): 
     def __init__(self, positive_iou_threshold=0.7, negative_iou_threshold=0.3):
         super(RPNLoss, self).__init__()
