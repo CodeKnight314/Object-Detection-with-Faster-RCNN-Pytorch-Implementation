@@ -316,9 +316,6 @@ def collate_fn(batch):
     labels = [item['labels'] if item['labels'].nelement() != 0 else torch.tensor([-1], dtype=torch.long) 
               for item in targets]
 
-    for box in boxes: 
-        print(box.shape)
-
     boxes = pad_sequence(boxes, batch_first=True, padding_value=-1)
     labels = pad_sequence(labels, batch_first=True, padding_value=-1)
 
