@@ -27,7 +27,7 @@ class ProposalFilter(nn.Module):
             # Apply NMS and select top-scoring proposals
             keep_idxs = self.nms(prop, scores)
             keep_idxs = keep_idxs[:self.max_proposals]
-    
+            
             # Check if we have less than max_proposals
             if len(keep_idxs) < self.max_proposals:
                 pad_size = self.max_proposals - len(keep_idxs)
@@ -42,8 +42,8 @@ class ProposalFilter(nn.Module):
     
             # Check if prop is empty or keep_idxs is empty after NMS
             if prop.shape[0] == 0 or len(keep_idxs) == 0:
-                filtered_proposals.append(torch.empty(0, 4, dtype=prop.dtype, device=prop.device))
-                filtered_scores.append(torch.empty(0, dtype=scores.dtype, device=scores.device))
+                filtered_proposals.append(torch.empty(1, 4, dtype=prop.dtype, device=prop.device))
+                filtered_scores.append(torch.empty(1, dtype=scores.dtype, device=scores.device))
             else:
                 filtered_proposals.append(prop[keep_idxs])
                 filtered_scores.append(scores[keep_idxs])
