@@ -42,8 +42,8 @@ class ProposalFilter(nn.Module):
     
             # Check if prop is empty or keep_idxs is empty after NMS
             if prop.shape[0] == 0 or len(keep_idxs) == 0:
-                filtered_proposals.append(torch.empty(1, 4, dtype=prop.dtype, device=prop.device))
-                filtered_scores.append(torch.empty(1, dtype=scores.dtype, device=scores.device))
+                filtered_proposals.append(torch.empty(256, 4, dtype=prop.dtype, device=prop.device))
+                filtered_scores.append(torch.empty(256, dtype=scores.dtype, device=scores.device))
             else:
                 filtered_proposals.append(prop[keep_idxs])
                 filtered_scores.append(scores[keep_idxs])
