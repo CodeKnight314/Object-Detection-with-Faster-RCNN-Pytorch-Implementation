@@ -1,6 +1,6 @@
 model_path = None
 
-batch_number = 32
+batch_number = 8
 
 lr = 1e-4 
 betas = ((0.9, 0.999))
