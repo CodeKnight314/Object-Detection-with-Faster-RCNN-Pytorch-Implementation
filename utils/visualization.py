@@ -6,6 +6,8 @@ from tqdm import tqdm
 import os
 import matplotlib.pyplot as plt
 import seaborn as sns
+import torch 
+import matplotlib.patches as patches
 
 def draw_boundary_box(image_path : str, coordinates : Tuple[Tuple[int]], color : Tuple[int], thickness : int,
                       output_directory : Union[str, None], show : bool = False): 
@@ -204,3 +206,32 @@ def plot_confusion_matrix(true_labels : np.array, predictions : np.array, num_cl
 
     if save_pth: 
         plt.savefig(save_pth)
+
+def visualize_anchors(image, anchors, draw_centers=False):
+    """
+    Visualizes the anchors and optionally their centers on the given image.
+
+    Args:
+        image (torch.Tensor): The input image tensor with shape (channels, height, width).
+        anchors (torch.Tensor): The anchors with shape (num_anchors, 4), each row in (x1, y1, x2, y2) format.
+        draw_centers (bool): If True, only the centers of the anchors will be drawn.
+    """
+    if torch.is_tensor(image):
+        image = image.squeeze(0).cpu().numpy().transpose(1, 2, 0)
+    
+    fig, ax = plt.subplots(1)
+    ax.imshow(image)
+    anchors = anchors.cpu().squeeze(0)
+
+    for i in range(anchors.shape[0]):
+        x1, y1, x2, y2 = anchors[i]
+        if draw_centers:
+            center_x = (x1 + x2) / 2
+            center_y = (y1 + y2) / 2
+            ax.plot(center_x, center_y, 'w+')
+            print(center_x, center_y)
+        else:
+            rect = patches.Rectangle((x1, y1), x2 - x1, y2 - y1, linewidth=1, edgecolor='r', facecolor='none')
+            ax.add_patch(rect)
+
+    plt.show()
