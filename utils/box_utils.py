@@ -12,18 +12,15 @@ def calculate_iou(proposals: torch.Tensor, references: torch.Tensor) -> torch.Te
     Returns:
         torch.Tensor: Tensor containing the IOU values with shape (number of proposals, number of references).
     """
-    # Calculate the intersection
     max_xy = torch.min(proposals[:, None, 2:], references[:, 2:])
     min_xy = torch.max(proposals[:, None, :2], references[:, :2])
     intersection = torch.clamp(max_xy - min_xy, min=0)
     intersection_area = intersection[..., 0] * intersection[..., 1]
 
-    # Calculate the union
     proposals_area = (proposals[:, 2] - proposals[:, 0]) * (proposals[:, 3] - proposals[:, 1])
     references_area = (references[:, 2] - references[:, 0]) * (references[:, 3] - references[:, 1])
     union_area = proposals_area[:, None] + references_area - intersection_area
 
-    # Calculate IoU
     iou = intersection_area / union_area
     return iou
 
@@ -40,13 +37,9 @@ def calculate_iou_batch(proposals: torch.Tensor, references: List[torch.Tensor])
     """
     batch = [] 
     
-    # Split into separate batches
     for i in range(proposals.size(0)): 
-
-        # Reference specific batch for both proposals and references
         prop, ref = proposals[i], references[i]
 
-        # Calculate and append the IOU matrix at the appropiate batch_index position
         batch.append(calculate_iou(prop,ref))
 
     return batch
@@ -64,14 +57,11 @@ def scale_bounding_box(coordinates : Tuple[int], scale_factor : float):
     """
     assert scale_factor > 0, f"[Erorr] Scale Factor should be postive but is defined as {scale_factor}"
     
-    # Unpackage coordinates
     xmin, ymin, xmax, ymax = coordinates
 
-    # Scale respective width and height by scale factor
     width = (xmax - xmin) * scale_factor
     height = (ymax - ymin) * scale_factor
     
-    # reformat the values to TLBR format
     xmax, ymax = xmin + width, ymax + height
 
     return (xmin, ymin, xmax, ymax)
@@ -90,29 +80,23 @@ def bbox_encode(anchors: torch.Tensor, anchor_offsets: torch.Tensor) -> torch.Te
         torch.Tensor: The adjusted anchor boxes tensor with shape (batch_size, num_anchors, 4).
             Each adjusted box is represented as (x_min, y_min, x_max, y_max).
     """
-    # Calculate the widths and heights of the anchors
     anchor_widths = anchors[:, :, 2] - anchors[:, :, 0]
     anchor_heights = anchors[:, :, 3] - anchors[:, :, 1]
 
-    # Calculate the center coordinates of the anchors
     anchor_center_x = anchors[:, :, 0] + 0.5 * anchor_widths
     anchor_center_y = anchors[:, :, 1] + 0.5 * anchor_heights
 
-    # Apply the offsets to the anchor center coordinates
     new_center_x = anchor_offsets[:, :, 0] * anchor_widths + anchor_center_x
     new_center_y = anchor_offsets[:, :, 1] * anchor_heights + anchor_center_y
 
-    # Apply the scaling factors to the widths and heights
     new_widths = torch.exp(anchor_offsets[:, :, 2]) * anchor_widths
     new_heights = torch.exp(anchor_offsets[:, :, 3]) * anchor_heights
 
-    # Calculate the top-left and bottom-right coordinates of the adjusted anchors
     top_left_x = new_center_x - 0.5 * new_widths
     top_left_y = new_center_y - 0.5 * new_heights
     bottom_right_x = new_center_x + 0.5 * new_widths
     bottom_right_y = new_center_y + 0.5 * new_heights
 
-    # Combine the coordinates into a single tensor
     adjusted_anchors = torch.stack([top_left_x, top_left_y, bottom_right_x, bottom_right_y], dim=2)
 
     return adjusted_anchors
@@ -131,25 +115,21 @@ def bbox_decode(anchor_batch_A: torch.Tensor, anchor_batch_B: torch.Tensor) -> t
         torch.Tensor: The relative deltas tensor with shape (batch_size, num_anchors, 4).
             Each delta is represented as (dx, dy, dw, dh).
     """
-    # Calculate the widths and heights of the anchors in both batches
     widths_A = anchor_batch_A[:, :, 2] - anchor_batch_A[:, :, 0]
     heights_A = anchor_batch_A[:, :, 3] - anchor_batch_A[:, :, 1]
     widths_B = anchor_batch_B[:, :, 2] - anchor_batch_B[:, :, 0]
     heights_B = anchor_batch_B[:, :, 3] - anchor_batch_B[:, :, 1]
 
-    # Calculate the center coordinates of the anchors in both batches
     center_x_A = anchor_batch_A[:, :, 0] + 0.5 * widths_A
     center_y_A = anchor_batch_A[:, :, 1] + 0.5 * heights_A
     center_x_B = anchor_batch_B[:, :, 0] + 0.5 * widths_B
     center_y_B = anchor_batch_B[:, :, 1] + 0.5 * heights_B
 
-    # Compute the relative deltas
     dx = (center_x_B - center_x_A) / widths_A
     dy = (center_y_B - center_y_A) / heights_A
     dw = torch.log(widths_B / widths_A)
     dh = torch.log(heights_B / heights_A)
 
-    # Combine the deltas into a single tensor
     deltas = torch.stack([dx, dy, dw, dh], dim=2)
 
     return deltas
