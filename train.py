@@ -9,6 +9,31 @@ from Faster_RCNN import Faster_RCNN
 from torch.utils.data import DataLoader
 from Faster_RCNN import *
 from tqdm import tqdm
+from typing import Dict
+
+def train_step(model : Faster_RCNN, data : Tuple[torch.Tensor, Dict], optimizer : torch.optim, rpn_loss_function : RPNLoss, frcnn_loss_function : FasterRCNNLoss,): 
+    images, gts = data
+    bboxes = [item["boxes"] for item in gts]
+    labels = [item["labels"] for item in gts]
+
+    optimizer.zero_grad()
+
+    frcnn_labels, frcnn_bboxes, rpn_predict_cls, rpn_predict_bbox_deltas, rpn_anchors = model(images)
+
+    rpn_start = time.time()
+    rpn_total_loss, _, _ = rpn_loss_function(rpn_predict_cls, rpn_predict_bbox_deltas, rpn_anchors, bboxes)
+    rpn_runtime = time.time() - rpn_start
+
+    frcnn_start = time.time()
+    frcnn_total_loss, _, _ = frcnn_loss_function(frcnn_labels, frcnn_bboxes, labels, bboxes)
+    frcnn_runtime = time.time() - frcnn_start
+
+    total_loss = rpn_total_loss + frcnn_total_loss
+    total_loss.backward()
+    optimizer.step()
+
+    return rpn_total_loss.item(), frcnn_total_loss.item(), rpn_runtime, frcnn_runtime, model.time_records["Total"]
+
 
 def train(model : Faster_RCNN, dataset : DataLoader, logger : LOGWRITER, optimizer : torch.optim, scheduler : opt.lr_scheduler.StepLR,
           rpn_loss_function : RPNLoss, frcnn_loss_function : FasterRCNNLoss, epochs : int): 
@@ -29,31 +54,16 @@ def train(model : Faster_RCNN, dataset : DataLoader, logger : LOGWRITER, optimiz
         frcnn_runtime = []
 
         for data in tqdm(dataset, desc = f"[{epoch+1}/{epochs}] Training"):
-            images, gts = data 
+            batch_rpn_loss, batch_frcnn_loss, batch_rpn_runtime, batch_frcnn_runtime, batch_model_runtime= train_step(
+                model, data, optimizer, rpn_loss_function, frcnn_loss_function)
 
-            # Note to self -> make bboxes and labels creation more efficient -> reduce loop down to one iteration max?
-            bboxes = [item["boxes"] for item in gts]
-            labels = [item["labels"] for item in gts]
+            rpn_loss.append(batch_rpn_loss)
+            frcnn_loss.append(batch_frcnn_loss)
+            rpn_runtime.append(batch_rpn_runtime)
+            frcnn_runtime.append(batch_frcnn_runtime)
+            model_runtime.append(batch_model_runtime)
 
-            optimizer.zero_grad()
-
-            frcnn_labels, frcnn_bboxes, rpn_predict_cls, rpn_predict_bbox_deltas, rpn_anchors= model(images)
-            model_runtime.append(torch.tensor(model.time_records["Total"]))
-
-            rpn_start = time.time()
-            rpn_total_loss, rpn_objectness_loss, rpn_bbox_loss = rpn_loss_function(rpn_predict_cls, rpn_predict_bbox_deltas, rpn_anchors, bboxes)
-            rpn_total = time.time() - rpn_start 
-
-            frcnn_start = time.time()
-            frcnn_total_loss, frcnn_regression_loss, frcnn_classification_loss = frcnn_loss_function(frcnn_labels, frcnn_bboxes, labels, bboxes)
-            frcnn_total = time.time() - frcnn_start
-
-            rpn_loss.append(rpn_total_loss)
-            frcnn_loss.append(frcnn_total_loss)
-            rpn_runtime.append(torch.tensor(rpn_total))
-            frcnn_runtime.append(torch.tensor(frcnn_total))
-
-            total_loss = frcnn_total_loss + rpn_total_loss
+            total_loss = batch_rpn_loss + batch_frcnn_loss
 
             total_loss.backward()
             optimizer.step()
