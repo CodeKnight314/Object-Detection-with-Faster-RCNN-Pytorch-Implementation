@@ -1,6 +1,9 @@
 import torch
 import torch.nn as nn
 from typing import Tuple
+import matplotlib.pyplot as plt
+import matplotlib.patches as patches
+from utils.visualization import visualize_anchors
 
 class AnchorGenerator(nn.Module):
     """
@@ -65,7 +68,6 @@ class AnchorGenerator(nn.Module):
         image_dim = [(images.size(2), images.size(3)) for _ in range(images.size(0))]
         feature_dim = [(feature_maps.size(2), feature_maps.size(3)) for _ in range(feature_maps.size(0))]
         strides = [(img_dim[0] / f_dim[0], img_dim[1] / f_dim[1]) for img_dim, f_dim in zip(image_dim, feature_dim)]
-        dtype, device = feature_maps.dtype, feature_maps.device
 
         anchors = torch.stack([self.generate_image_anchors(f_dim, stride, feature_maps.dtype, feature_maps.device) for f_dim, stride in zip(feature_dim, strides)], dim=0)
         return anchors
@@ -84,10 +86,14 @@ class AnchorGenerator(nn.Module):
             torch.Tensor: A tensor containing the generated anchors for the feature map with shape (num_anchors, 4).
         """
         grid_height, grid_width = feature_map_size
-        shifts_x = torch.arange(0, grid_width, dtype=dtype, device=device) * stride[0]
-        shifts_y = torch.arange(0, grid_height, dtype=dtype, device=device) * stride[1]
+
+        offset_x = stride[0] / 2
+        offset_y = stride[1] / 2
+        shifts_x = torch.arange(offset_x, grid_width * stride[0], step=stride[0], dtype=dtype, device=device)
+        shifts_y = torch.arange(offset_y, grid_height * stride[1], step=stride[1], dtype=dtype, device=device)
+
         shift_y, shift_x = torch.meshgrid(shifts_y, shifts_x, indexing="ij")
-        shifts = torch.stack((-shift_x, -shift_y, shift_x, shift_y), dim=-1).view(-1, 4)
+        shifts = torch.stack((shift_x, shift_y, shift_x, shift_y), dim=-1).view(-1, 4)
 
         stride_tensor = torch.tensor(stride, dtype=dtype, device=device).view(1, 2).repeat(1, 2)
         scaled_anchors = self.cell_anchors * stride_tensor
@@ -96,26 +102,25 @@ class AnchorGenerator(nn.Module):
         return all_anchors.view(-1, 4)
     
 def main(): 
-
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    batch_idx = 16 
+    batch_idx = 1
     channels = 3 
     img_height = 640 
-    img_width = 640 
+    img_width = 640
 
     f_channels = 512 
     f_height = 20 
     f_width = 20 
 
-    img = torch.rand((batch_idx, channels, img_height, img_width), dtype = torch.float32, device = device)
+    img = torch.zeros((batch_idx, channels, img_height, img_width), dtype = torch.float32, device = device)
     f_map = torch.rand((batch_idx, f_channels, f_height, f_width), dtype = torch.float32, device = device)
 
     anchorGen = AnchorGenerator(sizes=(128,256,512), aspect_ratios=(0.5,1,2))
 
     anchors = anchorGen(img, f_map)
 
-    print(anchors.shape)
+    visualize_anchors(img, anchors, draw_centers = True)
 
 if __name__ == "__main__": 
     main()
