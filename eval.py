@@ -50,3 +50,19 @@ def calculate_recall(iou_matrix : torch.Tensor,
     recall = true_positive.float() / (true_positive + false_negative).float() if true_positive + false_negative > 0 else 0.0 
 
     return recall
+
+def calculate_f1_score(precision : float,
+                       recall : float):
+    
+    """
+    Calculating F1-Score based on precision and recall 
+
+    Args: 
+        precision (float): precision score of object detection model 
+        recall (float)L: recall score of object detection model
+
+    Returns: 
+        float: returns a float based on the f1-score formula 2*(precision*recall)/(precision + recall)
+    """
+
+    return (2*precision*recall).float() / (precision + recall).float()
