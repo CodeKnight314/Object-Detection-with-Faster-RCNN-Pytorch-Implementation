@@ -8,7 +8,7 @@ def calculate_precision(iou_matrix : torch.Tensor,
                         negative_iou_threshold : float = 0.3,): 
     
     """
-    Calculating precision for a given set of proposals and references
+    Calculating precision for a given IOU Matrix
 
     Args: 
         iou_matrix (torch.Tensor): An IOU matrix of shape (batch, number of propsoals, number of references)
@@ -31,6 +31,15 @@ def calculate_precision(iou_matrix : torch.Tensor,
 def calculate_recall(iou_matrix : torch.Tensor, 
                      positive_iou_threshold : float = 0.5): 
     """
+    Calculating recall for a given IOU Matrix 
+
+    Args: 
+        iou_matrix (torch.Tensor): An IOU Matrix (batch, number of proposals, number of references)
+        positive_iou_threshold (float): A float defining the positive IOU threshold for a boundary box to be true positive.
+                                        All boundary boxes below the positive iou threshold are considered false negative.
+
+    Returns: 
+        float: returns a float based on recall formula (TP/(TP+FN)) or 0.0 if TP + FN = 0
     """
 
     max_iou, _ = iou_matrix.max(dim = 2)
