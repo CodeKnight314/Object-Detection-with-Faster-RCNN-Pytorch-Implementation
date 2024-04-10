@@ -6,7 +6,6 @@ from utils.box_utils import calculate_iou_batch
 def calculate_precision(iou_matrix : torch.Tensor, 
                         positive_iou_threshold : float = 0.7, 
                         negative_iou_threshold : float = 0.3,): 
-    
     """
     Calculating precision for a given IOU Matrix
 
@@ -53,7 +52,6 @@ def calculate_recall(iou_matrix : torch.Tensor,
 
 def calculate_f1_score(precision : float,
                        recall : float):
-    
     """
     Calculating F1-Score based on precision and recall 
 
@@ -66,3 +64,4 @@ def calculate_f1_score(precision : float,
     """
 
     return (2*precision*recall).float() / (precision + recall).float()
+
