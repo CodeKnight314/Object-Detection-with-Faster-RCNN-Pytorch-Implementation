@@ -25,6 +25,7 @@ class ObjectDetectionDataset(Dataset, ABC):
     def __init__(self, root_dir, image_height, image_width, annotation_dir, transforms=None, mode="train"):
         super().__init__()
         self.root_dir = root_dir 
+        self.data_dir = os.path.join(self.root_dir, mode)
         self.annotation_dir = annotation_dir
         self.img_height = image_height 
         self.img_width = image_width
@@ -117,7 +118,7 @@ class COCODataset(ObjectDetectionDataset):
         with open(self.annotation_dir, 'r') as f:
             annotations = json.load(f)
 
-        self.image_id_to_path = {img['id']: os.path.join(self.root_dir, img['file_name']) for img in annotations['images']}
+        self.image_id_to_path = {img['id']: os.path.join(self.data_dir, img['file_name']) for img in annotations['images']}
         image_paths = [self.image_id_to_path[img_id] for img_id in sorted(self.image_id_to_path)]
         return image_paths
     
@@ -154,7 +155,7 @@ class YOLOv4(ObjectDetectionDataset):
         with open(self.annotation_dir, 'r') as f:
             annotations = f.read().strip().split("\n")
 
-        image_paths = [os.path.join(self.root_dir, line.split()[0]) for line in annotations]
+        image_paths = [os.path.join(self.data_dir, line.split()[0]) for line in annotations]
         return image_paths
 
     def __parse_annotations__(self):
@@ -190,14 +191,14 @@ class YOLOv5tov8(ObjectDetectionDataset):
         """
         Loads the image file paths from the dataset directory.
         """
-        image_paths = sorted(glob(os.path.join(self.root_dir, "images/*.jpg"), recursive=recursive))
+        image_paths = sorted(glob(os.path.join(self.data_dir, "images/*.jpg"), recursive=recursive))
         return image_paths
     
     def __parse_annotations__(self, recursive=False):
         """
         Parses the YOLOv5 annotations and converts them to a format suitable for YOLOv8.
         """
-        annotations_dir = sorted(glob(os.path.join(self.root_dir, "labels/*.txt"), recursive=recursive))
+        annotations_dir = sorted(glob(os.path.join(self.data_dir, "labels/*.txt"), recursive=recursive))
         parsed_annotations = {img_id: [] for img_id in range(len(annotations_dir))}
         for img_id, (annotation_file, image_path) in enumerate(zip(annotations_dir, self.image_paths)):
             width, height = Image.open(image_path).convert("RGB").size
@@ -236,12 +237,12 @@ class PascalVOCXML(ObjectDetectionDataset):
 
     def __load_dataset__(self, recursive=False):
         """Loads the image file paths from the Pascal VOC dataset directory."""
-        image_paths = glob(os.path.join(self.root_dir, "*.jpg"), recursive=recursive)
+        image_paths = glob(os.path.join(self.data_dir, "*.jpg"), recursive=recursive)
         return image_paths
 
     def __parse_annotations__(self):
         """Parses the Pascal VOC XML annotations and maps them to the corresponding image IDs."""
-        annotation_files = glob(os.path.join(self.root_dir, "*.xml"))
+        annotation_files = glob(os.path.join(self.data_dir, "*.xml"))
         self.id_to_category = {}
 
         for xml_file in annotation_files:
@@ -328,7 +329,7 @@ def collate_fn(batch):
     return images, targets
 
 def main(): 
-    root_dir = "/workspace/train"
+    root_dir = "/workspace"
     annotation_dir = "/workspace/train/_annotations.coco.json"
     image_height = 600  # Example height
     image_width = 800  # Example width
