@@ -1,7 +1,14 @@
 import torch 
 import torch.nn as nn 
 from typing import List
-from utils.box_utils import calculate_iou_batch
+from utils.box_utils import * 
+from utils.log_writer import * 
+from utils.visualization import *
+from Faster_RCNN import *
+from typing import Dict, Tuple
+from loss import *
+import time
+from dataset import *
 
 def calculate_precision(iou_matrix : torch.Tensor, 
                         positive_iou_threshold : float = 0.7, 
@@ -65,3 +72,98 @@ def calculate_f1_score(precision : float,
 
     return (2*precision*recall).float() / (precision + recall).float()
 
+def eval_step(model : Faster_RCNN, 
+              data : Tuple[torch.Tensor, Dict], 
+              rpn_loss_function : RPNLoss, 
+              frcnn_loss_function : FasterRCNNLoss):
+    """
+    """
+    images, gts = data 
+    bboxes = [item["boxes"] for item in gts]
+    labels = [item["labels"] for item in gts]
+
+    frcnn_labels, frcnn_bboxes, rpn_predict_cls, rpn_predict_bbox_deltas, rpn_anchors = model(images)
+
+    rpn_start = time.time()
+    rpn_total_loss, _, _ = rpn_loss_function(rpn_predict_cls, rpn_predict_bbox_deltas, rpn_anchors, bboxes)
+    rpn_runtime = time.time() - rpn_start 
+
+    frcnn_start = time.time() 
+    frcnn_total_loss, _, _ = frcnn_loss_function(frcnn_labels, frcnn_bboxes, labels, bboxes)
+    frcnn_runtime = time.time() - frcnn_start
+
+    iou_matrix = calculate_iou_batch(frcnn_bboxes, bboxes)
+
+    precision = calculate_precision(iou_matrix=iou_matrix, positive_iou_threshold=0.7, negative_iou_threshold=0.3)
+    recall = calculate_recall(iou_matrix=iou_matrix, positive_iou_threshold=0.5)
+    f1_score = calculate_f1_score(precision=precision, recall=recall)
+
+    return rpn_total_loss.item(), frcnn_total_loss.item(), rpn_runtime, frcnn_runtime, model.time_records["Total"], precision, recall, f1_score
+
+def eval(model : Faster_RCNN,
+        dataset : DataLoader, 
+        logger : LOGWRITER, 
+        rpn_loss_function : RPNLoss, 
+        frcnn_loss_function : FasterRCNNLoss,
+        epochs : int): 
+    """
+    """
+    model.eval()
+    if configs.model_path: 
+        model.load_state_dict(torch.load(configs.model_path, 
+                                         map_location = "cuda" if torch.cuda.is_available() else "cpu"))
+        
+    for epoch in range(epochs):
+
+        batched_values = []
+
+        for data in tqdm(dataset, desc = f"[{epoch+1}/{epochs}]"):
+            values = eval_step(model=model, data=data, rpn_loss_function=rpn_loss_function, frcnn_loss_function=frcnn_loss_function)
+            batched_values.append(values)
+
+        averaged_values = torch.sum(torch.tensor(batched_values), dim = 1) / len(batched_values)
+
+        logger.write(epoch, RPN_Loss = averaged_values[0], 
+                     FRCNN_Loss = averaged_values[1], 
+                     RPN_runtime = averaged_values[2], 
+                     FRCNN_Runtime = averaged_values[3], 
+                     Model_Runtime = averaged_values[4], 
+                     precision = averaged_values[5], 
+                     recall = averaged_values[6], 
+                     f1_score = averaged_values[7])
+        
+def main():
+    val_dataset = load_COCO_dataset(configs.root_dir,
+                                    configs.image_height, 
+                                    configs.image_width, 
+                                    configs.annotation_dir, 
+                                    transforms=None, 
+                                    model="valid")
+    
+    val_dl = load_dataloaders(val_dataset[0], 
+                              configs.batch_number, 
+                              shuffle = True,
+                              drop_last = True)
+    
+    print("[INFO] Dataloader loaded successfully")
+    print(f"[INFO] Total validation samples {len(val_dataset[0])}")
+
+    model = get_model(cls_count = len(val_dataset[0].id_to_category), training=True)
+
+    logger = LOGWRITER(configs.output_dir, configs.epochs)
+
+    rpn_loss, frcnn_loss = get_loss_functions((0.7, 0.3))
+
+    eval(model=model, 
+         dataset=val_dl, 
+         logger=logger, 
+         rpn_loss_function=rpn_loss, 
+         frcnn_loss_function=frcnn_loss, 
+         epochs=configs.epochs)
+    
+if __name__ == "__main__": 
+    main()
+
+
+
+    
