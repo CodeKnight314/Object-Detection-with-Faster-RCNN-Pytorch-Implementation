@@ -11,7 +11,14 @@ from Faster_RCNN import *
 from tqdm import tqdm
 from typing import Dict
 
-def train_step(model : Faster_RCNN, data : Tuple[torch.Tensor, Dict], optimizer : torch.optim, rpn_loss_function : RPNLoss, frcnn_loss_function : FasterRCNNLoss,): 
+def train_step(model : Faster_RCNN, 
+               data : Tuple[torch.Tensor, Dict], 
+               optimizer : torch.optim, 
+               rpn_loss_function : RPNLoss, 
+               frcnn_loss_function : FasterRCNNLoss): 
+    """
+
+    """
     images, gts = data
     bboxes = [item["boxes"] for item in gts]
     labels = [item["labels"] for item in gts]
@@ -35,9 +42,17 @@ def train_step(model : Faster_RCNN, data : Tuple[torch.Tensor, Dict], optimizer 
     return rpn_total_loss.item(), frcnn_total_loss.item(), rpn_runtime, frcnn_runtime, model.time_records["Total"]
 
 
-def train(model : Faster_RCNN, dataset : DataLoader, logger : LOGWRITER, optimizer : torch.optim, scheduler : opt.lr_scheduler.StepLR,
-          rpn_loss_function : RPNLoss, frcnn_loss_function : FasterRCNNLoss, epochs : int): 
-    
+def train(model : Faster_RCNN, 
+          dataset : DataLoader, 
+          logger : LOGWRITER, 
+          optimizer : torch.optim, 
+          scheduler : opt.lr_scheduler.StepLR,
+          rpn_loss_function : RPNLoss, 
+          frcnn_loss_function : FasterRCNNLoss, 
+          epochs : int): 
+    """
+    """
+    model.train()
     if configs.model_path:
         model.load_state_dict(torch.load(configs.model_path, 
                                          map_location="cuda" if torch.cuda.is_available() else "cpu"))
@@ -46,45 +61,25 @@ def train(model : Faster_RCNN, dataset : DataLoader, logger : LOGWRITER, optimiz
 
     for epoch in range(epochs):
 
-        rpn_loss = []
-        frcnn_loss = []
-
-        model_runtime = []
-        rpn_runtime = []
-        frcnn_runtime = []
+        batched_values = []
 
         for data in tqdm(dataset, desc = f"[{epoch+1}/{epochs}] Training"):
-            batch_rpn_loss, batch_frcnn_loss, batch_rpn_runtime, batch_frcnn_runtime, batch_model_runtime= train_step(
-                model, data, optimizer, rpn_loss_function, frcnn_loss_function)
+            values = train_step(model, data, optimizer, rpn_loss_function, frcnn_loss_function)
+            batched_values.append(values)
 
-            rpn_loss.append(batch_rpn_loss)
-            frcnn_loss.append(batch_frcnn_loss)
-            rpn_runtime.append(batch_rpn_runtime)
-            frcnn_runtime.append(batch_frcnn_runtime)
-            model_runtime.append(batch_model_runtime)
+        averaged_values = torch.sum(torch.tensor(batched_values), dim = 1) / len(batched_values)
 
-            total_loss = batch_rpn_loss + batch_frcnn_loss
+        logger.write(epoch, RPN_Loss = averaged_values[0], 
+                     FRCNN_Loss = averaged_values[1], 
+                     RPN_Runtime = averaged_values[2], 
+                     FRCNN_Runtime = averaged_values[3],
+                     Model_Runtime = averaged_values[4])
 
-            total_loss.backward()
-            optimizer.step()
-
-        rpn_loss = torch.stack(rpn_loss).mean()
-        frcnn_loss = torch.stack(frcnn_loss).mean()
-        rpn_runtime = torch.stack(rpn_runtime).mean() 
-        frcnn_runtime = torch.stack(frcnn_runtime).mean()
-        model_runtime = torch.stack(model_runtime).mean()
-
-        logger.write(epoch, RPN_Loss = rpn_loss, 
-                     FRCNN_Loss = frcnn_loss, 
-                     RPN_Runtime = rpn_runtime, 
-                     FRCNN_Runtime = frcnn_runtime,
-                     Model_Runtime = model_runtime)
-
-        if best_loss > (rpn_loss + frcnn_loss):
+        if best_loss > (averaged_values[0] + averaged_values[1]):
             if not os.path.exists(configs.model_save_path):
                 os.makedirs(configs.model_save_path) 
-            torch.save(model.state_dict(), os.path.join(configs.model_save_path, "FRCNN_model.pth"))
-            best_loss = rpn_loss + frcnn_loss
+            torch.save(model.state_dict(), os.path.join(configs.model_save_path, f"FRCNN_model_{epoch+1}.pth"))
+            best_loss = averaged_values[0] + averaged_values[1]
 
         scheduler.step()
 
