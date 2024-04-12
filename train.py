@@ -17,7 +17,21 @@ def train_step(model : Faster_RCNN,
                rpn_loss_function : RPNLoss, 
                frcnn_loss_function : FasterRCNNLoss): 
     """
+    Training Step for training the model at each step. 
 
+    Args: 
+        model (Faster_RCNN): Faster RCNN Model for evaluation. 
+        data (Tuple[torch.Tensor, DIct]): A tuple containing a batched tensor (N, C, H, W) and a dictionary with corresponding labels and bboxes
+        optimizer (torch.optim): Optimizer for model to update and backpropagate loss.
+        rpn_loss_function (RPNLoss): RPN Loss function for calculating loss.
+        frcnn_loss_function (FasterRCNNLoss): FRCNN Loss function for calculating loss.
+
+    Returns: 
+        rpn_total_loss.item() (float): rpn_loss as a float 
+        frcnn_total_loss.item() (float): frcnn_loss as a float 
+        rpn_runtime (float): RPN runtime in seconds 
+        frcnn_runtime (float): FRCNN runtime in seconds 
+        model.time_records["Total"] (float): model runtime in seconds
     """
     images, gts = data
     bboxes = [item["boxes"] for item in gts]
@@ -51,6 +65,17 @@ def train(model : Faster_RCNN,
           frcnn_loss_function : FasterRCNNLoss, 
           epochs : int): 
     """
+    Training Protocol for a given model and dataset. 
+
+    Args: 
+        model (Faster_RCNN): Faster RCNN model for evaluation. Model path is loaded if valid. 
+        dataset (DataLoader): Validation dataset under the subclass of ObjectDetectionDataset. 
+        logger (LOGWRITER): Log writer that takes kwargs and writes them to txt file.
+        optimizer (torch.optim): Optimizer for model to update and propagate loss.
+        scheduler (opt.lr_scheduler.StepLR): Learning rate scheduler to update the learning rate of the optimizer
+        rpn_loss_function (RPNLoss): RPN Loss function for calculating loss 
+        frcnn_loss_function (FasterRCNNLoss): FRCNN Loss function for calculating loss 
+        epoch (int): total number of epochs
     """
     model.train()
     if configs.model_path:

@@ -77,6 +77,23 @@ def eval_step(model : Faster_RCNN,
               rpn_loss_function : RPNLoss, 
               frcnn_loss_function : FasterRCNNLoss):
     """
+    Evaluation Step for evaluating the model at each step. 
+
+    Args: 
+        model (Faster_RCNN): Faster RCNN Model for evaluation. 
+        data (Tuple[torch.Tensor, DIct]): a tuple containing a batched tensor (N, C, H, W) and a dictionary with corresponding labels and bboxes
+        rpn_loss_function (RPNLoss): RPN Loss function for calculating loss.
+        frcnn_loss_function (FasterRCNNLoss): FRCNN Loss function for calculating loss. 
+
+    Return: 
+        rpn_total_loss.item() (float): rpn_loss as a float 
+        frcnn_total_loss.item() (float): frcnn_loss as a float 
+        rpn_runtime (float): RPN runtime in seconds 
+        frcnn_runtime (float): FRCNN runtime in seconds 
+        model.time_records["Total"] (float): model runtime in seconds
+        precision (float): precision score based on model outputs 
+        recall (float): recall score based on model outputs 
+        f1_score (float): f1_score based on model outputs
     """
     images, gts = data 
     bboxes = [item["boxes"] for item in gts]
@@ -107,9 +124,18 @@ def eval(model : Faster_RCNN,
         frcnn_loss_function : FasterRCNNLoss,
         epochs : int): 
     """
+    Evaluation Protocol for a given model and dataset 
+
+    Args: 
+        model (Faster_RCNN): Faster RCNN model for evaluation. Model path is loaded if valid. 
+        dataset (DataLoader): Validation dataset under the subclass of ObjectDetectionDataset. 
+        logger (LOGWRITER): Log writer that takes kwargs and writes them to txt file.
+        rpn_loss_function (RPNLoss): RPN Loss function for calculating loss 
+        frcnn_loss_function (FasterRCNNLoss): FRCNN Loss function for calculating loss 
+        epoch (int): total number of epochs
     """
     model.eval()
-    if configs.model_path: 
+    if os.path.exists(configs.model_path): 
         model.load_state_dict(torch.load(configs.model_path, 
                                          map_location = "cuda" if torch.cuda.is_available() else "cpu"))
         
