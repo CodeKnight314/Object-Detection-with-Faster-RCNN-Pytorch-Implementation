@@ -6,6 +6,7 @@ import torch.nn.functional as F
 from typing import List
 import torch.optim as opt 
 import random 
+import time
 
 class FasterRCNNLoss(nn.Module):
     def __init__(self, positive_iou_threshold: float, negative_iou_threshold: float):
@@ -213,6 +214,7 @@ def main():
 
     rpn_loss, frcnn_loss = get_loss_functions() 
 
+    start = time.time()
     rpn_cls = torch.rand((batch_idx, num_of_proposals, 2), dtype = torch.float32, device = device) 
 
     rpn_bbox = torch.rand((batch_idx, num_of_proposals, 4), dtype = torch.float32, device = device) * 32
@@ -223,7 +225,7 @@ def main():
 
     total_loss_rpn = rpn_loss(rpn_cls, rpn_bbox, anchors, references)
 
-    print(total_loss_rpn.item())
+    print(f"RPN Loss: {total_loss_rpn.item()}")
 
     frcnn_cls = torch.rand((batch_idx, num_of_proposals, num_of_classes), dtype = torch.float32, device = device) 
 
@@ -235,7 +237,10 @@ def main():
 
     total_loss, avg_classification_loss, avg_regression_loss = frcnn_loss(frcnn_cls, frcnn_bbox, frcnn_labels, frcnn_gt_bbox)
 
-    print(total_loss.item())
+    end = time.time() - start
+    print(f"FRCNN Loss: {total_loss.item()}")
+
+    print(f"Total Runtime: {end}")
 
 if __name__ == "__main__": 
     main()
