@@ -212,7 +212,7 @@ def main():
     num_of_proposals = 300 
     num_of_classes = 21
 
-    rpn_loss, frcnn_loss = get_loss_functions() 
+    rpn_loss, frcnn_loss = get_loss_functions((0.7, 0.3)) 
 
     start = time.time()
     rpn_cls = torch.rand((batch_idx, num_of_proposals, 2), dtype = torch.float32, device = device) 
