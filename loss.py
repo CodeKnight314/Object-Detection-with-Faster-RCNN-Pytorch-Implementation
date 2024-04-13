@@ -221,7 +221,7 @@ def main():
 
     anchors = torch.rand((batch_idx, num_of_proposals, 4), dtype = torch.float32, device = device)
 
-    references = [torch.rand((random.randint(1, 10), 4), dtype = torch.int64, device = device) for _ in range(batch_idx)]
+    references = [torch.rand((random.randint(1, 10), 4), dtype = torch.float32, device = device) for _ in range(batch_idx)]
 
     total_loss_rpn = rpn_loss(rpn_cls, rpn_bbox, anchors, references)
 
@@ -229,11 +229,11 @@ def main():
 
     frcnn_cls = torch.rand((batch_idx, num_of_proposals, num_of_classes), dtype = torch.float32, device = device) 
 
-    frcnn_bbox = torch.rand((batch_idx, num_of_proposals, num_of_classes * 4), dtype = torch.int64, device = device)
+    frcnn_bbox = torch.rand((batch_idx, num_of_proposals, num_of_classes * 4), dtype = torch.float32, device = device)
 
-    frcnn_labels = [torch.rand((10, 1), dtype = torch.int64, device = device) for _ in range(batch_idx)]
+    frcnn_labels = [torch.rand((10, 1), dtype = torch.float32, device = device) for _ in range(batch_idx)]
 
-    frcnn_gt_bbox= [torch.rand((10, 4), dtype = torch.int64, device = device) for _ in range(batch_idx)]
+    frcnn_gt_bbox= [torch.rand((10, 4), dtype = torch.float32, device = device) for _ in range(batch_idx)]
 
     total_loss, avg_classification_loss, avg_regression_loss = frcnn_loss(frcnn_cls, frcnn_bbox, frcnn_labels, frcnn_gt_bbox)
 
