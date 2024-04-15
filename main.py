@@ -12,6 +12,20 @@ def TAE(model : Faster_RCNN,
         rpn_loss_function : RPNLoss,
         frcnn_loss_function : FasterRCNNLoss,
         epochs : int):
+    """
+    Trains and evaluates the FRCNN model for a given set of train and validation dataset
+
+    Args: 
+        model (Faster_RCNN): Faster RCNN model for evaluation. Model path is loaded if valid. 
+        train_dataLoader (DataLoader): Train dataset under the subclass of ObjectDetectionDataset. 
+        validation_dataLoader (DataLoader): Validation dataset under subclass of ObjectDetectionDataset.
+        logger (LOGWRITER): Log writer that takes kwargs and writes them to txt file.
+        optimizer (torch.optim): Optimizer for model to update and propagate loss.
+        scheduler (opt.lr_scheduler.StepLR): Learning rate scheduler to update the learning rate of the optimizer
+        rpn_loss_function (RPNLoss): RPN Loss function for calculating loss 
+        frcnn_loss_function (FasterRCNNLoss): FRCNN Loss function for calculating loss 
+        epoch (int): total number of epochs
+    """
     
     for epoch in range(epochs): 
         
