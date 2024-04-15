@@ -26,7 +26,6 @@ class ObjectDetectionDataset(Dataset, ABC):
         super().__init__()
         self.root_dir = root_dir 
         self.data_dir = os.path.join(self.root_dir, mode)
-        self.annotation_dir = annotation_dir
         self.img_height = image_height 
         self.img_width = image_width
         self.transforms = transforms
@@ -115,7 +114,7 @@ class COCODataset(ObjectDetectionDataset):
     """
     def __load_dataset__(self):
         """Loads the image file paths from the COCO annotation file."""
-        with open(self.annotation_dir, 'r') as f:
+        with open(os.path.join(self.data_dir, "_annotations.coco.json"), 'r') as f:
             annotations = json.load(f)
 
         self.image_id_to_path = {img['id']: os.path.join(self.data_dir, img['file_name']) for img in annotations['images']}
@@ -124,7 +123,7 @@ class COCODataset(ObjectDetectionDataset):
     
     def __parse_annotations__(self):
         """Parses the COCO annotations and maps them to the corresponding image IDs."""
-        with open(self.annotation_dir, 'r') as f:
+        with open(os.path.join(self.data_dir, "_annotations.coco.json"), 'r') as f:
             annotations = json.load(f)
 
         # Mapping category IDs to class names
@@ -152,7 +151,7 @@ class YOLOv4(ObjectDetectionDataset):
     """
     def __load_dataset__(self):
         """Loads the image file paths from the YOLOv4 annotation file."""
-        with open(self.annotation_dir, 'r') as f:
+        with open(os.path.join(self.data_dir, "_annotations.txt"), 'r') as f:
             annotations = f.read().strip().split("\n")
 
         image_paths = [os.path.join(self.data_dir, line.split()[0]) for line in annotations]
@@ -160,7 +159,7 @@ class YOLOv4(ObjectDetectionDataset):
 
     def __parse_annotations__(self):
         """Parses the YOLOv4 annotations and maps them to the corresponding image IDs."""
-        with open(self.annotation_dir, 'r') as f:
+        with open(os.path.join(self.data_dir, "_annotations.txt"), 'r') as f:
             annotations = f.read().split("\n")
 
         parsed_annotations = {img_id: [] for img_id in range(len(annotations))}
