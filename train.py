@@ -69,7 +69,7 @@ def train(model : Faster_RCNN,
 
     Args: 
         model (Faster_RCNN): Faster RCNN model for evaluation. Model path is loaded if valid. 
-        dataset (DataLoader): Validation dataset under the subclass of ObjectDetectionDataset. 
+        dataset (DataLoader): Train dataset under the subclass of ObjectDetectionDataset. 
         logger (LOGWRITER): Log writer that takes kwargs and writes them to txt file.
         optimizer (torch.optim): Optimizer for model to update and propagate loss.
         scheduler (opt.lr_scheduler.StepLR): Learning rate scheduler to update the learning rate of the optimizer
