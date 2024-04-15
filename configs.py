@@ -12,12 +12,10 @@ model_save_path = "/workspace/Model_save_dir/"
 
 num_of_classes = None
 
-root_dir = "/workspace/train"
+root_dir = "/workspace"
 
 image_height = 640 
 image_width = 640 
-
-annotation_dir = "/workspace/train/_annotations.coco.json"
 
 transforms = None
 
