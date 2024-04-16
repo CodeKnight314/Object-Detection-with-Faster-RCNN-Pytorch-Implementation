@@ -6,11 +6,9 @@ lr = 1e-4
 betas = ((0.9, 0.999))
 weight_decay = 1e-3
 
-epochs = 25 
+epochs = 20
 
 model_save_path = "/workspace/Model_save_dir/"
-
-num_of_classes = None
 
 root_dir = "/workspace"
 
