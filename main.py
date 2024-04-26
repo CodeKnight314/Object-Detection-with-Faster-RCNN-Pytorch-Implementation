@@ -26,6 +26,8 @@ def TAE(model : Faster_RCNN,
         frcnn_loss_function (FasterRCNNLoss): FRCNN Loss function for calculating loss 
         epoch (int): total number of epochs
     """
+
+    best_loss = float('inf')
     
     for epoch in range(epochs): 
         
