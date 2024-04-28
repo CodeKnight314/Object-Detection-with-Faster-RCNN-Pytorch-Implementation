@@ -308,6 +308,18 @@ def load_dataloaders(dataset: ObjectDetectionDataset, batch_size: int, shuffle: 
     return dl
 
 def collate_fn(batch):
+    """
+    Custom collate function for batching images and their corresponding target dictionaries which include bounding boxes
+    and labels. This function handles cases where bounding boxes or labels might be empty by assigning placeholder values.
+
+    Args:
+        batch (list of tuples): A list of tuples, where each tuple contains an image tensor and a target dictionary. The
+                                target dictionary for each image includes 'boxes' and 'labels'.
+
+    Returns:
+        Tuple[torch.Tensor, list of dict]: A tuple containing a batched tensor of images and a list of target dictionaries.
+                                           The images tensor has a shape of (N, C, H, W).
+    """
     images, targets = list(zip(*batch))
     
     # Pad the bounding boxes and labels
