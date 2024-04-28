@@ -133,7 +133,6 @@ def add_impulse_noise(image_path : str, output_directory : Union[str, None], low
         upper_bound (int): upper bound of the uniform distribution
         output_directory (Union[str, None]): If directory is specified, image will be saved to specified directory
         show (bool): Shows image and destroys window after pressing key
-
     """
     image = cv2.imread(image_path)
 
@@ -156,6 +155,26 @@ def add_impulse_noise(image_path : str, output_directory : Union[str, None], low
     return image
 
 def batch_noise(root_dir : str, output_dir : Union[str, None], show : bool = False, mode : str = "gaussian", **kwargs):
+    """
+    Applies noise to all images in a specified directory and saves the modified images to an output directory. 
+    The function supports different types of noise such as Gaussian, uniform, and impulse.
+
+    Args:
+        root_dir (str): The directory containing the images to process.
+        output_dir (Union[str, None]): The directory where the noised images will be saved. If None, images are not saved.
+        show (bool): If True, displays the noised image. Defaults to False.
+        mode (str): The type of noise to apply. Options include 'gaussian', 'uniform', or 'impulse'.
+        **kwargs: Keyword arguments specific to the type of noise:
+            For 'gaussian':
+                mean (float): The mean of the Gaussian noise.
+                std (float): The standard deviation of the Gaussian noise.
+            For 'uniform' and 'impulse':
+                lower_bound (float): The lower bound of the noise distribution.
+                upper_bound (float): The upper bound of the noise distribution.
+
+    Raises:
+        ValueError: If an invalid mode is specified.
+    """
     image_paths = glob(os.path.join(root_dir, "/*"))
     if mode.lower() == "gaussian":           
         for image in tqdm(image_paths): 
@@ -188,7 +207,6 @@ def plot_confusion_matrix(true_labels : np.array, predictions : np.array, num_cl
         num_classes (np.array): Total number of classes
         save_pth (Union[str, None]): save path for confusion matrix 
     """
-    
     # Compute the confusion matrix
     cm = np.zeros((num_classes, num_classes), dtype=int)
     for true, pred in zip(true_labels, predictions):
