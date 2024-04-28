@@ -11,6 +11,17 @@ class ProposalFilter(nn.Module):
         self.max_proposals = max_proposals
 
     def forward(self, proposals: torch.Tensor, cls_scores: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        Process a batch of proposals and classification scores, filtering them according to predefined thresholds.
+
+        Args:
+            proposals (torch.Tensor): Tensor containing proposals for a batch of images, each proposal defined by its coordinates.
+            cls_scores (torch.Tensor): Tensor containing classification scores for each proposal in the batch.
+
+        Returns:
+            Tuple[torch.Tensor, torch.Tensor]: A tuple of tensors, the first containing the filtered proposals, 
+                                               the second containing the corresponding scores for these proposals.
+        """
         batch_size = proposals.shape[0]
         filtered_proposals = []
         filtered_scores = []
@@ -52,6 +63,16 @@ class ProposalFilter(nn.Module):
 
 
     def nms(self, proposals: torch.Tensor, scores: torch.Tensor) -> torch.Tensor:
+        """
+        Applies Non-Maximum Suppression (NMS) to reduce redundancy among proposals by eliminating those with high overlap.
+
+        Args:
+            proposals (torch.Tensor): Proposals for a single image, each defined by coordinates.
+            scores (torch.Tensor): Scores corresponding to each proposal.
+
+        Returns:
+            torch.Tensor: Indices of proposals that remain after applying NMS.
+        """
         _, idxs = scores.sort(descending=True)
         proposals = proposals[idxs]
 
@@ -67,11 +88,31 @@ class ProposalFilter(nn.Module):
         return torch.tensor(keep, dtype=torch.long, device=proposals.device)
 
     def calculate_iou(self, proposal: torch.Tensor, proposals: torch.Tensor) -> torch.Tensor:
+        """
+        Calculates the Intersection over Union (IoU) between a given proposal and a set of other proposals.
+
+        Args:
+            proposal (torch.Tensor): A single proposal.
+            proposals (torch.Tensor): A tensor of proposals to compare against.
+
+        Returns:
+            torch.Tensor: IoU values between the given proposal and each proposal in the set.
+        """
         inter_area, union_area = self._calculate_areas(proposal, proposals)
         iou = inter_area / union_area
         return iou
 
     def _calculate_areas(self, proposal: torch.Tensor, proposals: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        Helper method to calculate the intersection and union areas between a given proposal and a set of proposals.
+
+        Args:
+            proposal (torch.Tensor): A single proposal tensor.
+            proposals (torch.Tensor): A tensor of proposals to compare against.
+
+        Returns:
+            Tuple[torch.Tensor, torch.Tensor]: Two tensors, one containing the intersection areas and the other containing the union areas.
+        """
         x1, y1, x2, y2 = proposal[..., 0], proposal[..., 1], proposal[..., 2], proposal[..., 3]
         x1s, y1s, x2s, y2s = proposals[..., 0], proposals[..., 1], proposals[..., 2], proposals[..., 3]
 
