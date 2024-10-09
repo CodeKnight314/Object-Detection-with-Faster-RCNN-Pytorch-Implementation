@@ -1,136 +1,123 @@
 import torch 
 import configs
 import torch.nn as nn 
-from loss import *
-from torch_snippets import *
-from dataset import *
+from loss import get_loss_functions, RPNLoss, FasterRCNNLoss
+from dataset import get_dataset
 from utils.log_writer import LOGWRITER
 from Faster_RCNN import Faster_RCNN
 from torch.utils.data import DataLoader
-from Faster_RCNN import *
+from Faster_RCNN import get_model
 from tqdm import tqdm
-from typing import Dict
+from typing import Dict, Tuple
+import argparse
+import os
 
-def train_step(model : Faster_RCNN, 
-               data : Tuple[torch.Tensor, Dict], 
-               optimizer : torch.optim, 
-               rpn_loss_function : RPNLoss, 
-               frcnn_loss_function : FasterRCNNLoss): 
+def train_step(model: Faster_RCNN, 
+               data: Tuple[torch.Tensor, Dict], 
+               optimizer: torch.optim.Optimizer, 
+               rpn_loss_function: RPNLoss, 
+               frcnn_loss_function: FasterRCNNLoss): 
     """
     Training Step for training the model at each step. 
 
     Args: 
         model (Faster_RCNN): Faster RCNN Model for evaluation. 
-        data (Tuple[torch.Tensor, DIct]): A tuple containing a batched tensor (N, C, H, W) and a dictionary with corresponding labels and bboxes
-        optimizer (torch.optim): Optimizer for model to update and backpropagate loss.
+        data (Tuple[torch.Tensor, Dict]): A tuple containing a batched tensor (N, C, H, W) and a dictionary with corresponding labels and bboxes.
+        optimizer (torch.optim.Optimizer): Optimizer for model to update and backpropagate loss.
         rpn_loss_function (RPNLoss): RPN Loss function for calculating loss.
         frcnn_loss_function (FasterRCNNLoss): FRCNN Loss function for calculating loss.
 
     Returns: 
-        rpn_total_loss.item() (float): rpn_loss as a float 
-        frcnn_total_loss.item() (float): frcnn_loss as a float 
-        rpn_runtime (float): RPN runtime in seconds 
-        frcnn_runtime (float): FRCNN runtime in seconds 
-        model.time_records["Total"] (float): model runtime in seconds
+        Tuple[float, float]: The RPN and FRCNN losses as floats.
     """
+    device = "cuda" if torch.cuda.is_available() else "cpu"
     images, gts = data
-    bboxes = [item["boxes"] for item in gts]
-    labels = [item["labels"] for item in gts]
+    images = images.to(device)
+    bboxes = [item["boxes"].to(device) for item in gts]
+    labels = [item["labels"].to(device) for item in gts]
 
     optimizer.zero_grad()
 
     frcnn_labels, frcnn_bboxes, rpn_predict_cls, rpn_predict_bbox_deltas, rpn_anchors = model(images)
 
-    rpn_start = time.time()
     rpn_total_loss, _, _ = rpn_loss_function(rpn_predict_cls, rpn_predict_bbox_deltas, rpn_anchors, bboxes)
-    rpn_runtime = time.time() - rpn_start
 
-    frcnn_start = time.time()
     frcnn_total_loss, _, _ = frcnn_loss_function(frcnn_labels, frcnn_bboxes, labels, bboxes)
-    frcnn_runtime = time.time() - frcnn_start
 
     total_loss = rpn_total_loss + frcnn_total_loss
+
+    if torch.isnan(total_loss):
+        print("NaN encountered in loss. Skipping update.")
+        return rpn_total_loss.item(), frcnn_total_loss.item()
+
     total_loss.backward()
     optimizer.step()
 
-    return rpn_total_loss.item(), frcnn_total_loss.item(), rpn_runtime, frcnn_runtime, model.time_records["Total"]
+    return rpn_total_loss.item(), frcnn_total_loss.item()
 
-
-def train(model : Faster_RCNN, 
-          dataset : DataLoader, 
-          logger : LOGWRITER, 
-          optimizer : torch.optim, 
-          scheduler : opt.lr_scheduler.StepLR,
-          rpn_loss_function : RPNLoss, 
-          frcnn_loss_function : FasterRCNNLoss, 
-          epochs : int): 
+def train(model: Faster_RCNN, 
+          dataset: DataLoader, 
+          logger: LOGWRITER, 
+          optimizer: torch.optim.Optimizer, 
+          scheduler: torch.optim.lr_scheduler.StepLR,
+          rpn_loss_function: RPNLoss, 
+          frcnn_loss_function: FasterRCNNLoss, 
+          epochs: int, 
+          output_path: str): 
     """
     Training Protocol for a given model and dataset. 
 
     Args: 
         model (Faster_RCNN): Faster RCNN model for evaluation. Model path is loaded if valid. 
         dataset (DataLoader): Train dataset under the subclass of ObjectDetectionDataset. 
-        logger (LOGWRITER): Log writer that takes kwargs and writes them to txt file.
-        optimizer (torch.optim): Optimizer for model to update and propagate loss.
-        scheduler (opt.lr_scheduler.StepLR): Learning rate scheduler to update the learning rate of the optimizer
-        rpn_loss_function (RPNLoss): RPN Loss function for calculating loss 
-        frcnn_loss_function (FasterRCNNLoss): FRCNN Loss function for calculating loss 
-        epoch (int): total number of epochs
+        logger (LOGWRITER): Log writer that takes kwargs and writes them to a txt file.
+        optimizer (torch.optim.Optimizer): Optimizer for model to update and propagate loss.
+        scheduler (torch.optim.lr_scheduler.StepLR): Learning rate scheduler to update the learning rate of the optimizer.
+        rpn_loss_function (RPNLoss): RPN Loss function for calculating loss.
+        frcnn_loss_function (FasterRCNNLoss): FRCNN Loss function for calculating loss.
+        epochs (int): Total number of epochs.
     """
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    model.to(device)
     model.train()
+    
     if configs.model_path:
         model.load_state_dict(torch.load(configs.model_path, 
-                                         map_location="cuda" if torch.cuda.is_available() else "cpu"))
+                                         map_location=device))
 
     best_loss = float('inf')
 
     for epoch in range(epochs):
-
         batched_values = []
 
-        for data in tqdm(dataset, desc = f"[{epoch+1}/{epochs}] Training"):
+        for data in tqdm(dataset, desc=f"[{epoch+1}/{epochs}] Training"):
             values = train_step(model, data, optimizer, rpn_loss_function, frcnn_loss_function)
             batched_values.append(values)
 
-        averaged_values = torch.sum(torch.tensor(batched_values), dim = 1) / len(batched_values)
+        batched_values = torch.tensor(batched_values, dtype=torch.float32)
+        averaged_values = batched_values.mean(dim=0)
 
-        logger.write(epoch, RPN_Loss = averaged_values[0], 
-                     FRCNN_Loss = averaged_values[1], 
-                     RPN_Runtime = averaged_values[2], 
-                     FRCNN_Runtime = averaged_values[3],
-                     Model_Runtime = averaged_values[4])
+        logger.write(epoch + 1, 
+                     RPN_Loss=averaged_values[0].item(), 
+                     FRCNN_Loss=averaged_values[1].item())
 
         if best_loss > (averaged_values[0] + averaged_values[1]):
-            if not os.path.exists(configs.model_save_path):
-                os.makedirs(configs.model_save_path) 
-            torch.save(model.state_dict(), os.path.join(configs.model_save_path, f"FRCNN_model_{epoch+1}.pth"))
+            if not os.path.exists(output_path):
+                os.makedirs(output_path) 
+            torch.save(model.state_dict(), os.path.join(output_path, f"FRCNN_model_{epoch+1}.pth"))
             best_loss = averaged_values[0] + averaged_values[1]
 
         scheduler.step()
 
-def main(): 
-    train_dataset = load_COCO_dataset(configs.root_dir,
-                          configs.image_height, 
-                          configs.image_width, 
-                          configs.annotation_dir, 
-                          transforms=None, 
-                          mode="train"),
+def main(args): 
+    train_dl = get_dataset(args.root_dir, args.img_h, args.img_w, "train", args.batch_size)
     
-    train_dl = load_dataloaders(train_dataset[0], 
-                                configs.batch_number,
-                                shuffle = True, 
-                                drop_last = True)
+    model = get_model(cls_count=2, training=True)  # cls_count=2 since it's either human or not human
 
-    print("[INFO] Dataloader loaded successfully")
-    print(f"[INFO] total training samples {len(train_dataset[0])}")
-    
-    model = get_model(cls_count = len(train_dataset[0].id_to_category), training=True)
+    logger = LOGWRITER(args.output_dir, args.epochs)
 
-    logger = LOGWRITER(configs.output_dir, configs.epochs)
-
-    opt = get_optimizer(model, lr=configs.lr, betas=configs.betas, weight_decay=configs.weight_decay)
-
-    scheduler = get_scheduler(optimizer = opt, step_size = configs.epochs//5, gamma = 0.5)
+    opt = torch.optim.AdamW(model.parameters(), lr=args.lr, betas=(0.9, 0.999), weight_decay=1e-3)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer=opt, eta_min=args.lr / 100, T_max=args.epochs * 0.75)
 
     rpn_loss, frcnn_loss = get_loss_functions((0.7, 0.3))
 
@@ -141,7 +128,19 @@ def main():
           scheduler=scheduler, 
           rpn_loss_function=rpn_loss, 
           frcnn_loss_function=frcnn_loss, 
-          epochs=configs.epochs)
+          epochs=args.epochs,
+          output_path=args.outpath)
 
 if __name__ == "__main__": 
-    main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--root_dir", type=str, required=True)
+    parser.add_argument("--img_h", type=int, default=512)
+    parser.add_argument("--img_w", type=int, default=512)
+    parser.add_argument("--batch_size", type=int, default=16)
+    parser.add_argument("--lr", type=float, default=1e-4)
+    parser.add_argument("--epochs", type=int, default=50)
+    parser.add_argument("--outpath", type=str, required=True)
+    
+    args = parser.parse_args()
+    
+    main(args)
