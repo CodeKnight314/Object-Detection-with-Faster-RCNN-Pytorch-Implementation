@@ -14,42 +14,51 @@ class FasterRCNNLoss(nn.Module):
         self.positive_iou_anchor = positive_iou_threshold
         self.negative_iou_anchor = negative_iou_threshold
 
-    def select_frcnn_bbox_from_cls(self, frcnn_cls: torch.Tensor, frcnn_bbox: torch.Tensor):
-        _, prediction = frcnn_cls.max(dim=2)
-        prediction_index = prediction[..., None, None].expand(-1, -1, 1, 4)
-        selected_bbox = torch.gather(frcnn_bbox, dim=2, index=prediction_index).squeeze(2)
-        return prediction, selected_bbox
-
     def forward(self, frcnn_cls: torch.Tensor, frcnn_bbox: torch.Tensor, frcnn_labels: List[torch.Tensor], frcnn_gt_bbox: List[torch.Tensor]):
+        """
+        Calculate the classification and regression losses for Faster R-CNN.
+        Args:
+            frcnn_cls (torch.Tensor): Predicted class scores with shape (batch_size, num_proposals, num_classes).
+            frcnn_bbox (torch.Tensor): Predicted bounding box deltas with shape (batch_size, num_proposals, num_classes * 4).
+            frcnn_labels (List[torch.Tensor]): List of ground truth class labels for each image in the batch.
+            frcnn_gt_bbox (List[torch.Tensor]): List of ground truth boxes for each image in the batch.
 
-        frcnn_pred, frcnn_bbox = self.select_frcnn_bbox_from_cls(frcnn_cls, frcnn_bbox)
+        Returns:
+            Tuple[torch.Tensor, torch.Tensor, torch.Tensor]: Total loss, regression loss, and classification loss.
+        """
+        batch_size = frcnn_cls.size(0)
+        classification_loss = 0.0
+        regression_loss = 0.0
 
-        highest_iou = [matrix.max(dim = 1)[1].unsqueeze(0) for matrix in calculate_iou_batch(frcnn_bbox, frcnn_gt_bbox)]
+        for i in range(batch_size):
+            # Get ground truth labels and bounding boxes for current batch
+            gt_labels = frcnn_labels[i]
+            gt_boxes = frcnn_gt_bbox[i]
 
-        gts_cls = [] 
-        gts_bbox = []
-        for i in range(frcnn_cls.size(0)): 
-            gts_cls.append(frcnn_labels[i][highest_iou[i]].squeeze(0))
-            gts_bbox.append(frcnn_gt_bbox[i][highest_iou[i]].squeeze(0))
+            # Calculate IoU between predicted boxes and ground truth boxes
+            iou_matrix = calculate_iou(frcnn_bbox[i], gt_boxes)
 
-        gts_cls = torch.stack(gts_cls).to(frcnn_pred.device).long()
-        gts_bbox = torch.stack(gts_bbox).to(frcnn_pred.device)
+            # Determine positive and negative samples
+            max_iou, max_indices = iou_matrix.max(dim=1)
+            positive_indices = torch.where(max_iou >= self.positive_iou_anchor)[0]
+            negative_indices = torch.where(max_iou < self.negative_iou_anchor)[0]
 
-        valid_indices = (gts_cls != -1).view(-1)
+            # Classification Loss
+            labels = torch.full((frcnn_cls.size(1),), -1, dtype=torch.long, device=frcnn_cls.device)
+            labels[positive_indices] = gt_labels[max_indices[positive_indices]]
+            labels[negative_indices] = 0  # Background class
 
-        if valid_indices.any():
-            frcnn_cls = frcnn_cls.view(-1, frcnn_cls.size(-1))[valid_indices]
-            gts_cls = gts_cls.view(-1)[valid_indices]
-        else:
-            classification_loss = torch.tensor(0.0).to(frcnn_cls.device)  # Example fallback
+            valid_indices = labels != -1
+            if valid_indices.sum() > 0:
+                classification_loss += F.cross_entropy(frcnn_cls[i][valid_indices], labels[valid_indices])
 
-        
-        classification_loss = F.cross_entropy(frcnn_cls, gts_cls)        
+            # Regression Loss
+            if positive_indices.numel() > 0:
+                pos_predicted_boxes = frcnn_bbox[i][positive_indices]
+                pos_gt_boxes = gt_boxes[max_indices[positive_indices]]
+                regression_loss += F.smooth_l1_loss(pos_predicted_boxes, pos_gt_boxes, reduction='mean')
 
-        regression_loss = F.smooth_l1_loss(frcnn_bbox, gts_bbox)
-        
-        total_loss = regression_loss + classification_loss 
-
+        total_loss = classification_loss + regression_loss
         return total_loss, regression_loss, classification_loss
             
 class RPNLoss(nn.Module): 
@@ -134,8 +143,11 @@ class RPNLoss(nn.Module):
         
         mask = labels != -1
         
-        BCELoss = F.binary_cross_entropy_with_logits(cls_scores[:, :, 1], labels.float(), reduction='none') * mask
-        objectness_loss = BCELoss.sum() / mask.sum()
+        if mask.sum() > 0:
+            BCELoss = F.binary_cross_entropy_with_logits(cls_scores[:, :, 1], labels.float(), reduction='none') * mask
+            objectness_loss = BCELoss.sum() / mask.sum()
+        else:
+            objectness_loss = torch.tensor(0.0, device=cls_scores.device)
         
         bbox_loss = 0.0
         
@@ -159,32 +171,6 @@ class RPNLoss(nn.Module):
         total_loss = objectness_loss + bbox_loss
         
         return total_loss, objectness_loss, bbox_loss
-    
-def get_optimizer(model, lr : float, betas : Tuple[float], weight_decay : float): 
-    """
-    Helper function for defining optimizer 
-
-    Args: 
-        model : the model associated with the given optimizer 
-        lr (float): learning rate for the optimizer 
-        betas (Tuple[float]): a pair of floats
-        weight_decay (float): determine rate of weight decay
-
-    Returns:
-        torch.optim : optimizer with the given parameters
-    """
-    return opt.Adam(model.parameters(), lr = lr, betas=betas, weight_decay=weight_decay)
-
-def get_scheduler(optimizer : torch.optim, step_size : int, gamma : float): 
-    """
-    Helper function for defining learning rate scheduler -> may try to define my own for fun but who knows?
-
-    Args: 
-        optimizer (torch.optim): optimizer associated with the given learning rate scheduler 
-        step_size (int): length of interval between each learning rate reduction 
-        gamme (float): the rate at which the optimizer's learning rate decreases. New learning rate = lr * gamma at each step size interval
-    """
-    return opt.lr_scheduler.StepLR(optimizer=optimizer, step_size=step_size, gamma=gamma)
 
 def get_loss_functions(iou_thresholds : Tuple[int, int]):
     """
@@ -197,50 +183,10 @@ def get_loss_functions(iou_thresholds : Tuple[int, int]):
         RPNLoss : loss calculation class for RPN outputs 
         FasterRCNNLoss : loss calculation class for Faster RCNN
     """
-    assert len(iou_thresholds) == 2,f"[Error] Expected 2 iou threshold values but receievd {len(iou_thresholds)}"
+    assert len(iou_thresholds) == 2,f"[Error] Expected 2 iou threshold values but received {len(iou_thresholds)}"
     positive_iou_threshold, negative_iou_threshold = iou_thresholds
 
     rpn_loss = RPNLoss(positive_iou_threshold=positive_iou_threshold, negative_iou_threshold=negative_iou_threshold)
     frcnn_loss = FasterRCNNLoss(positive_iou_threshold=positive_iou_threshold, negative_iou_threshold=negative_iou_threshold)
 
     return rpn_loss, frcnn_loss
-
-def main(): 
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-
-    batch_idx = 16 
-    num_of_proposals = 300 
-    num_of_classes = 21
-
-    rpn_loss, frcnn_loss = get_loss_functions((0.7, 0.3)) 
-
-    start = time.time()
-    rpn_cls = torch.rand((batch_idx, num_of_proposals, 2), dtype = torch.float32, device = device) 
-
-    rpn_bbox = torch.rand((batch_idx, num_of_proposals, 4), dtype = torch.float32, device = device) * 32
-
-    anchors = torch.rand((batch_idx, num_of_proposals, 4), dtype = torch.float32, device = device)
-
-    references = [torch.rand((random.randint(1, 10), 4), dtype = torch.float32, device = device) for _ in range(batch_idx)]
-
-    total_loss_rpn = rpn_loss(rpn_cls, rpn_bbox, anchors, references)
-
-    print(f"RPN Loss: {total_loss_rpn.item()}")
-
-    frcnn_cls = torch.rand((batch_idx, num_of_proposals, num_of_classes), dtype = torch.float32, device = device) 
-
-    frcnn_bbox = torch.rand((batch_idx, num_of_proposals, num_of_classes * 4), dtype = torch.float32, device = device)
-
-    frcnn_labels = [torch.rand((10, 1), dtype = torch.float32, device = device) for _ in range(batch_idx)]
-
-    frcnn_gt_bbox= [torch.rand((10, 4), dtype = torch.float32, device = device) for _ in range(batch_idx)]
-
-    total_loss, avg_classification_loss, avg_regression_loss = frcnn_loss(frcnn_cls, frcnn_bbox, frcnn_labels, frcnn_gt_bbox)
-
-    end = time.time() - start
-    print(f"FRCNN Loss: {total_loss.item()}")
-
-    print(f"Total Runtime: {end}")
-
-if __name__ == "__main__": 
-    main()
