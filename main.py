@@ -8,7 +8,7 @@ from loss import get_loss_functions
 from Faster_RCNN import get_model
 from utils.log_writer import LOGWRITER
 
-def TAE(model: torch.nn.Module,
+def HumanDetection(model: torch.nn.Module,
         train_dataLoader: torch.utils.data.DataLoader,
         validation_dataLoader: torch.utils.data.DataLoader,
         logger: LOGWRITER,
@@ -97,7 +97,7 @@ def main(args):
     rpn_loss, frcnn_loss = get_loss_functions((0.7, 0.3))
     print("[INFO] Utility functions loaded.")
 
-    TAE(model=model,
+    HumanDetection(model=model,
         train_dataLoader=train_dl, 
         validation_dataLoader=val_dl,
         logger=logger,
