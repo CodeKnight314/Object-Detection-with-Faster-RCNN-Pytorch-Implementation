@@ -1,51 +1,117 @@
 import torch
 import torch.nn as nn
-from torchvision.models import resnet18
 from typing import Tuple
 from AnchorGenerator import AnchorGenerator
 from utils.box_utils import *
-from roi import ROIPooling
 from Proposal_Filter import ProposalFilter
 
-class RPN_head(nn.Module):
-  """
-  Determines Objectness Score and BBox Regression
-
-  Attributes:
-    input_dimensions (int): Number of input channels.
-    mid_channels (int): Number of channels in the intermediate convolutional layers.
-    num_anchors (int): Number of anchors per location.
-    conv_depth (int): Depth of the convolutional layers in the RPN head.
-  """
-  def __init__(self, input_dimensions: int, mid_channels: int, num_anchors: int, conv_depth: int) -> None:
-    super(RPN_head,self).__init__()
-    self.input_dimensions = input_dimensions
-    self.num_anchors = num_anchors
-    self.conv_depth = conv_depth
-
-    self.conv = nn.Sequential(*[nn.Conv2d(input_dimensions, mid_channels, kernel_size=3, stride=1, padding=1) if _ == 0 else
-                               nn.Conv2d(mid_channels, mid_channels, kernel_size=3, stride=1, padding=1) for _ in range(conv_depth)])
-
-    self.cls = nn.Conv2d(mid_channels, num_anchors * 2, kernel_size=1, stride=1, padding=0)
-    self.bbox = nn.Conv2d(mid_channels, num_anchors * 4, kernel_size=1, stride=1, padding=0)
-
-  def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+def bbox_adjust(anchors: torch.Tensor, anchor_offsets: torch.Tensor) -> torch.Tensor:
     """
-    Forward pass of the RPN head.
+    Adjusts the bounding box deltas and applies them to the anchor boxes.
 
     Args:
-      x (torch.Tensor): Input feature map with shape (batch_size, input_dimensions, height, width).
+        anchors (torch.Tensor): The anchor boxes tensor with shape (batch_size, num_anchors, 4).
+            Each anchor box is represented as (x_min, y_min, x_max, y_max).
+        anchor_offsets (torch.Tensor): The predicted bounding box deltas with shape (batch_size, num_anchors, 4).
+            Each delta is represented as (dx, dy, dw, dh).
 
     Returns:
-      Tuple[torch.Tensor, torch.Tensor]: Tuple containing objectness scores with shape (batch_size, num_anchors * height * width, 2)
-                                          and predicted bounding box deltas with shape (batch_size, num_anchors * height * width, 4).
+        torch.Tensor: The adjusted anchor boxes tensor with shape (batch_size, num_anchors, 4).
+            Each adjusted box is represented as (x_min, y_min, x_max, y_max).
     """
-    N, C, H, W = x.shape
-    out = self.conv(x)
-    cls_scores = torch.sigmoid(self.cls(out)).reshape(N, -1, 2)
-    predicted_bbox = self.bbox(out).permute(0, 2, 3, 1).reshape(N, -1, 4)
+    anchor_widths = anchors[:, :, 2] - anchors[:, :, 0]
+    anchor_heights = anchors[:, :, 3] - anchors[:, :, 1]
 
-    return (cls_scores, predicted_bbox)
+    anchor_center_x = anchors[:, :, 0] + 0.5 * anchor_widths
+    anchor_center_y = anchors[:, :, 1] + 0.5 * anchor_heights
+
+    new_center_x = anchor_offsets[:, :, 0] * anchor_widths + anchor_center_x
+    new_center_y = anchor_offsets[:, :, 1] * anchor_heights + anchor_center_y
+
+    new_widths = torch.exp(anchor_offsets[:, :, 2]) * anchor_widths
+    new_heights = torch.exp(anchor_offsets[:, :, 3]) * anchor_heights
+
+    top_left_x = new_center_x - 0.5 * new_widths
+    top_left_y = new_center_y - 0.5 * new_heights
+    bottom_right_x = new_center_x + 0.5 * new_widths
+    bottom_right_y = new_center_y + 0.5 * new_heights
+
+    adjusted_anchors = torch.stack([top_left_x, top_left_y, bottom_right_x, bottom_right_y], dim=2)
+
+    return adjusted_anchors
+
+def bbox_deltas(anchor_batch_A: torch.Tensor, anchor_batch_B: torch.Tensor) -> torch.Tensor:
+    """
+    Encodes the relative deltas between two batches of anchor boxes.
+
+    Args:
+        anchor_batch_A (torch.Tensor): The first batch of anchor boxes with shape (batch_size, num_anchors, 4).
+            Each anchor box is represented as (x_min, y_min, x_max, y_max).
+        anchor_batch_B (torch.Tensor): The second batch of anchor boxes with shape (batch_size, num_anchors, 4).
+            Each anchor box is represented as (x_min, y_min, x_max, y_max).
+
+    Returns:
+        torch.Tensor: The relative deltas tensor with shape (batch_size, num_anchors, 4).
+            Each delta is represented as (dx, dy, dw, dh).
+    """
+    widths_A = anchor_batch_A[:, :, 2] - anchor_batch_A[:, :, 0]
+    heights_A = anchor_batch_A[:, :, 3] - anchor_batch_A[:, :, 1]
+    widths_B = anchor_batch_B[:, :, 2] - anchor_batch_B[:, :, 0]
+    heights_B = anchor_batch_B[:, :, 3] - anchor_batch_B[:, :, 1]
+
+    center_x_A = anchor_batch_A[:, :, 0] + 0.5 * widths_A
+    center_y_A = anchor_batch_A[:, :, 1] + 0.5 * heights_A
+    center_x_B = anchor_batch_B[:, :, 0] + 0.5 * widths_B
+    center_y_B = anchor_batch_B[:, :, 1] + 0.5 * heights_B
+
+    dx = (center_x_B - center_x_A) / widths_A
+    dy = (center_y_B - center_y_A) / heights_A
+    dw = torch.log(widths_B / widths_A)
+    dh = torch.log(heights_B / heights_A)
+
+    deltas = torch.stack([dx, dy, dw, dh], dim=2)
+
+    return deltas
+
+class RPN_head(nn.Module):
+    """
+    Determines Objectness Score and BBox Regression
+
+    Attributes:
+        input_dimensions (int): Number of input channels.
+        mid_channels (int): Number of channels in the intermediate convolutional layers.
+        num_anchors (int): Number of anchors per location.
+        conv_depth (int): Depth of the convolutional layers in the RPN head.
+    """
+    def __init__(self, input_dimensions: int, mid_channels: int, num_anchors: int, conv_depth: int) -> None:
+        super(RPN_head, self).__init__()
+        self.input_dimensions = input_dimensions
+        self.num_anchors = num_anchors
+        self.conv_depth = conv_depth
+
+        self.conv = nn.Sequential(*[nn.Conv2d(input_dimensions, mid_channels, kernel_size=3, stride=1, padding=1) if _ == 0 else
+                                    nn.Conv2d(mid_channels, mid_channels, kernel_size=3, stride=1, padding=1) for _ in range(conv_depth)])
+
+        self.cls = nn.Conv2d(mid_channels, num_anchors * 2, kernel_size=1, stride=1, padding=0)
+        self.bbox = nn.Conv2d(mid_channels, num_anchors * 4, kernel_size=1, stride=1, padding=0)
+
+    def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        Forward pass of the RPN head.
+
+        Args:
+            x (torch.Tensor): Input feature map with shape (batch_size, input_dimensions, height, width).
+
+        Returns:
+            Tuple[torch.Tensor, torch.Tensor]: Tuple containing objectness scores with shape (batch_size, num_anchors * height * width, 2)
+                                              and predicted bounding box deltas with shape (batch_size, num_anchors * height * width, 4).
+        """
+        N, C, H, W = x.shape
+        out = self.conv(x)
+        cls_scores = torch.sigmoid(self.cls(out)).reshape(N, -1, 2)
+        predicted_bbox = self.bbox(out).permute(0, 2, 3, 1).reshape(N, -1, 4)
+
+        return (cls_scores, predicted_bbox)
 
 class Regional_Proposal_Network(nn.Module):
     """
@@ -72,7 +138,7 @@ class Regional_Proposal_Network(nn.Module):
                  max_proposals: int,
                  size: Tuple[int],
                  aspect_ratio: Tuple[int],
-                 train_mode : bool = True
+                 train_mode: bool = True
                  ):
 
         super(Regional_Proposal_Network, self).__init__()
@@ -102,45 +168,17 @@ class Regional_Proposal_Network(nn.Module):
         predict_cls, predict_bbox_deltas = self.rpn_head(feature_map)
         anchors = self.anchor_gen(image_list, feature_map)
         
-        decoded_anchors = bbox_encode(predict_bbox_deltas, anchors)
+        decoded_anchors = bbox_adjust(anchors, predict_bbox_deltas)
         
         filtered_anchors, filtered_cls = self.proposal_Filter(decoded_anchors, predict_cls)
         
         roi = filtered_anchors.view(-1, 4)
 
-        batch_index = torch.cat([torch.full((len(batch), 1), i) for i, batch in enumerate(filtered_anchors)], dim = 0).to(feature_map.device)
+        batch_index = torch.cat([torch.full((filtered_anchors[i].size(0), 1), i) for i in range(len(filtered_anchors))], dim=0).to(feature_map.device)
 
-        roi = torch.cat([roi, batch_index], dim = 1)
+        roi = torch.cat([roi, batch_index], dim=1)
 
         if self.train_mode: 
-          return roi, predict_cls, predict_bbox_deltas, anchors
+            return roi, predict_cls, predict_bbox_deltas, anchors
         else:
-          return roi
-
-def main():
-    """
-    Main function for rpn.py. Runs a test instance to verify the framework's output shape
-    """ 
-    batch_idx = 16
-
-    image_channels = 3 
-    height = 640 
-    width = 640
-
-    feature_map_dim = 512
-    f_map_height = 16 
-    f_map_width = 16
-
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-
-    image_list = torch.rand((batch_idx, image_channels, height, width), dtype = torch.float32, device = device)
-    feature_map = torch.rand((batch_idx, feature_map_dim, f_map_height, f_map_width), dtype = torch.float32, device = device)
-
-    rpn = Regional_Proposal_Network(512, 512, 3, 0.5, 0.5, 16, 1000, (128, 256, 512), (0.5, 1, 2)).to(device)
-
-    output = rpn(image_list, feature_map)
-
-    print(output.shape)
-
-if __name__ == "__main__": 
-  main()
+            return roi
