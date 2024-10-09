@@ -1,9 +1,6 @@
 import torch
 import torch.nn as nn
 from typing import Tuple
-import matplotlib.pyplot as plt
-import matplotlib.patches as patches
-from utils.visualization import visualize_anchors
 
 class AnchorGenerator(nn.Module):
     """
@@ -65,11 +62,17 @@ class AnchorGenerator(nn.Module):
         Returns:
             torch.Tensor: A tensor containing the generated anchors for each feature map with shape (batch_size, num_anchors, 4).
         """
-        image_dim = [(images.size(2), images.size(3)) for _ in range(images.size(0))]
-        feature_dim = [(feature_maps.size(2), feature_maps.size(3)) for _ in range(feature_maps.size(0))]
+        batch_size = images.size(0)
+        image_dim = [(images.size(2), images.size(3)) for _ in range(batch_size)]
+        feature_dim = [(feature_maps.size(2), feature_maps.size(3)) for _ in range(batch_size)]
         strides = [(img_dim[0] / f_dim[0], img_dim[1] / f_dim[1]) for img_dim, f_dim in zip(image_dim, feature_dim)]
 
-        anchors = torch.stack([self.generate_image_anchors(f_dim, stride, feature_maps.dtype, feature_maps.device) for f_dim, stride in zip(feature_dim, strides)], dim=0)
+        anchors = []
+        for b in range(batch_size):
+            anchors_per_image = self.generate_image_anchors(feature_dim[b], strides[b], feature_maps.dtype, feature_maps.device)
+            anchors.append(anchors_per_image)
+        
+        anchors = torch.stack(anchors, dim=0)
         return anchors
 
     def generate_image_anchors(self, feature_map_size: Tuple[int, int], stride: Tuple[float, float], dtype: torch.dtype, device: str) -> torch.Tensor:
@@ -104,7 +107,7 @@ class AnchorGenerator(nn.Module):
 def main(): 
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    batch_idx = 1
+    batch_idx = 16
     channels = 3 
     img_height = 640 
     img_width = 640
@@ -119,8 +122,8 @@ def main():
     anchorGen = AnchorGenerator(sizes=(128,256,512), aspect_ratios=(0.5,1,2))
 
     anchors = anchorGen(img, f_map)
-
-    visualize_anchors(img, anchors, draw_centers = True)
+    
+    print(anchors.shape)
 
 if __name__ == "__main__": 
     main()
