@@ -18,21 +18,19 @@ class HumanDetectionDataset(Dataset):
         transforms (torchvision.transforms.Compose, optional): Transformations to be applied to the images.
         mode (str): Mode of the dataset, can be 'train' or 'valid'.
     """
-    def __init__(self, root_dir, image_height, image_width, transforms=None, mode="train"):
+    def __init__(self, root_dir, image_height, image_width, mode="train"):
         super().__init__()
         self.root_dir = root_dir 
         self.data_dir = os.path.join(self.root_dir, mode)
         self.img_height = image_height 
         self.img_width = image_width
-        self.transforms = transforms
         self.mode = mode
 
-        if self.transforms is None:
-            self.transforms = T.Compose([
-                T.Resize((image_height, image_width)),
-                T.ToTensor(),
-                T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])  # Add normalization parameters
-            ])
+        self.transforms = T.Compose([
+            T.Resize((image_height, image_width)),
+            T.ToTensor(),
+            T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])  # Add normalization parameters
+        ])
 
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.id_to_category = {}
@@ -121,22 +119,6 @@ class HumanDetectionDataset(Dataset):
 
         return ann
 
-def load_dataloaders(dataset: HumanDetectionDataset, batch_size: int, shuffle: bool, drop_last: bool) -> DataLoader:
-    """
-    Utility function to create a DataLoader from an ObjectDetectionDataset.
-
-    Args:
-        dataset (ObjectDetectionDataset): The dataset to load into the DataLoader.
-        batch_size (int): The number of samples in each batch.
-        shuffle (bool): Whether to shuffle the data.
-        drop_last (bool): Whether to drop the last incomplete batch.
-
-    Returns:
-        DataLoader: A DataLoader for the given dataset.
-    """
-    dl = DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, drop_last=drop_last, collate_fn = collate_fn)
-    return dl
-
 def collate_fn(batch):
     """
     Custom collate function for batching images and their corresponding target dictionaries which include bounding boxes
@@ -168,6 +150,14 @@ def collate_fn(batch):
     images = torch.stack(images, dim=0)
 
     return images, targets
+
+def get_dataset(root_dir: str, img_h: int, img_w: int, mode: str, batch_size: int):
+    """
+    Helper Function for getting Human Detection Dataset
+    """
+    ds = HumanDetectionDataset(root_dir, img_h, img_w, mode)
+    dl = DataLoader(ds, batch_size=batch_size, shuffle=True, collate_fn = collate_fn)
+    return dl
 
 def main(args): 
     coco_dataset = HumanDetectionDataset(args.root_dir, args.img_height, args.img_width, args.mode)
