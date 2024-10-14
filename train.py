@@ -1,5 +1,4 @@
 import torch 
-import configs
 import torch.nn as nn 
 from loss import get_loss_functions, RPNLoss, FasterRCNNLoss
 from dataset import get_dataset
@@ -63,7 +62,8 @@ def train(model: Faster_RCNN,
           rpn_loss_function: RPNLoss, 
           frcnn_loss_function: FasterRCNNLoss, 
           epochs: int, 
-          output_path: str): 
+          output_path: str, 
+          weights: str): 
     """
     Training Protocol for a given model and dataset. 
 
@@ -81,8 +81,8 @@ def train(model: Faster_RCNN,
     model.to(device)
     model.train()
     
-    if configs.model_path:
-        model.load_state_dict(torch.load(configs.model_path, 
+    if weights:
+        model.load_state_dict(torch.load(weights, weights_only=True,
                                          map_location=device))
 
     best_loss = float('inf')
@@ -129,7 +129,8 @@ def main(args):
           rpn_loss_function=rpn_loss, 
           frcnn_loss_function=frcnn_loss, 
           epochs=args.epochs,
-          output_path=args.outpath)
+          output_path=args.outpath, 
+          weights=args.weights)
 
 if __name__ == "__main__": 
     parser = argparse.ArgumentParser()
@@ -140,6 +141,7 @@ if __name__ == "__main__":
     parser.add_argument("--lr", type=float, default=1e-4)
     parser.add_argument("--epochs", type=int, default=50)
     parser.add_argument("--outpath", type=str, required=True)
+    parser.add_argument("--weights", type=str)
     
     args = parser.parse_args()
     
